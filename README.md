@@ -321,3 +321,29 @@ python expense_tool.py report data/sample_bad.csv --rules rules.json
   html:     out\latest\sample_bad\report.html
   全体: 11 / OK: 3 / エラー: 8 / 警告: 1
 ```
+
+---
+
+## GUI update (A/B): sample run + downloads
+
+### New sidebar actions
+
+- `Run with uploaded CSV`: runs validation/report flow for the uploaded file.
+- `Run sample_bad.csv`: runs `data/sample_bad.csv` without any upload.
+
+### Download outputs from the browser
+
+After each run, the app now shows direct download buttons:
+
+- `errors.csv`
+- `warnings.csv`
+- `clean.csv`
+- `summary.csv`
+- `report.xlsx` (when Excel output is enabled)
+- `report.html` (when HTML output is enabled)
+
+If a file cannot be read, the app shows a warning instead of a broken button.
+
+### State persistence
+
+The GUI stores the latest run in `st.session_state["last_run"]`, so result tables and download buttons remain visible after Streamlit reruns.

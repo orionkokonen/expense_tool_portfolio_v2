@@ -1,15 +1,21 @@
 # CHANGELOG
 
+## v0.3
+
+- Streamlit GUI: added `Run sample_bad.csv` button for one-click sample execution.
+- Streamlit GUI: added direct download buttons for `errors.csv`, `warnings.csv`, `clean.csv`, `summary.csv`, `report.xlsx`, and `report.html`.
+- Streamlit GUI: added `st.session_state["last_run"]` persistence so result tables and download buttons remain visible after reruns.
+
 ## v0.2
 
-- rules.json 対応（カテゴリ許可、禁止ワード、日付範囲、上限）
-- warnings.csv 出力
-- Excel(.xlsx) / HTMLレポート 出力
-- merchant上位 / 曜日別 / 平均・中央値 など集計追加
-- --timestamp 対応
-- 終了コード（0/2）
+- Added `rules.json` support, including category rules, banned words, date range checks, and amount limit checks.
+- Added `warnings.csv` output and warning handling flow.
+- Added Excel (`.xlsx`) and HTML report generation.
+- Added summary enhancements (top merchants, weekday totals, average, median).
+- Added `--timestamp` output naming option.
+- Added coverage and basic tests.
 
 ## v0.1
 
-- CSVの基本チェック（必須列、日付、金額、重複）
-- errors.csv / summary.csv 出力
+- Added core CSV validation and error detection.
+- Added `errors.csv` and `summary.csv` outputs.
