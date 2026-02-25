@@ -1,0 +1,21 @@
+{
+  "allowed_categories": [
+    "交通費",
+    "交際費",
+    "消耗品費",
+    "会議費",
+    "旅費",
+    "通信費",
+    "その他"
+  ],
+  "unknown_category_mode": "warn",
+  "fallback_category": "その他",
+  "banned_words": ["ギャンブル","パチンコ","競馬"],
+  "date_range": {"min":"2026-01-01","max":"2026-12-31"},
+  "limits": {
+    "daily_total": 30000,
+    "monthly_total": 200000,
+    "category_daily": {"交通費": 10000},
+    "category_monthly": {"交際費": 30000}
+  }
+}

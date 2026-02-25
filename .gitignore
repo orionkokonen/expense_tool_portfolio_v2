@@ -1,0 +1,21 @@
+# Python 仮想環境（絶対に上げない）
+venv/
+.venv/
+
+# Python キャッシュ（いらない）
+__pycache__/
+*.pyc
+
+# Ruff キャッシュ（いらない）
+.ruff_cache/
+
+# 出力物（自動生成なので上げない）
+out/
+*.xlsx
+*.html
+
+# OSやエディタのゴミ
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
