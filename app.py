@@ -15,7 +15,8 @@ from html_report import write_html_report
 from rules import apply_rules, load_rules
 
 LAST_RUN_KEY = "last_run"
-SAMPLE_CSV_PATH = Path("data/sample_bad.csv")
+SAMPLE_BAD_CSV_PATH = Path("data/sample_bad.csv")
+SAMPLE_GOOD_CSV_PATH = Path("data/sample_good.csv")
 
 
 st.set_page_config(page_title="Expense Tool", layout="wide")
@@ -129,11 +130,12 @@ with st.sidebar:
     do_html = st.checkbox("Generate HTML report", value=True)
 
     run_upload_btn = st.button("Run with uploaded CSV", type="primary")
-    run_sample_btn = st.button("Run sample_bad.csv")
+    run_sample_bad_btn = st.button("Run sample_bad.csv")
+    run_sample_good_btn = st.button("Run sample_good.csv")
 
 run_error: str | None = None
 
-if run_upload_btn or run_sample_btn:
+if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
     rules_path = Path(rules_path_str)
     out_dir = Path(out_dir_str)
     result: dict[str, Any] | None = None
@@ -157,11 +159,12 @@ if run_upload_btn or run_sample_btn:
                             do_html=do_html,
                         )
             else:
-                if not SAMPLE_CSV_PATH.exists():
-                    run_error = f"Sample CSV not found: {SAMPLE_CSV_PATH}"
+                sample_csv_path = SAMPLE_BAD_CSV_PATH if run_sample_bad_btn else SAMPLE_GOOD_CSV_PATH
+                if not sample_csv_path.exists():
+                    run_error = f"Sample CSV not found: {sample_csv_path}"
                 else:
                     result = _run_pipeline(
-                        csv_path=SAMPLE_CSV_PATH,
+                        csv_path=sample_csv_path,
                         rules_path=rules_path,
                         out_dir=out_dir,
                         top_n=int(top_n),
@@ -180,7 +183,7 @@ if run_error:
 
 last_run = st.session_state.get(LAST_RUN_KEY)
 if last_run is None:
-    st.info("Upload a CSV and run, or click 'Run sample_bad.csv'.")
+    st.info("Upload a CSV and run, or click 'Run sample_bad.csv' / 'Run sample_good.csv'.")
     st.stop()
 
 errors = last_run["errors"]
