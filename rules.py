@@ -42,11 +42,21 @@ class Rules:
 
 
 def load_rules(path: Path) -> Rules:
+    """rules.json を読み込み、Rules データクラスに変換して返す。
+
+    不正な値（例: unknown_category_mode に想定外の文字列）が設定されていた場合は、
+    エラーを出さずに安全なデフォルト値（"warn"）へフォールバックする。
+    これにより、設定ファイルの記述ミスでアプリが止まることを防ぐ。
+
+    frozen=True のデータクラスを使うのは、ルール設定が処理中に
+    意図せず変更されないよう不変（immutable）にするため。
+    """
     data = json.loads(path.read_text(encoding="utf-8"))
 
     allowed = data.get("allowed_categories")
     banned = data.get("banned_words")
 
+    # 想定外のモード値はデフォルトの "warn" に正規化する
     mode = (data.get("unknown_category_mode") or "warn").lower()
     if mode not in {"warn", "ignore", "fallback"}:
         mode = "warn"
@@ -75,6 +85,11 @@ def load_rules(path: Path) -> Rules:
 
 
 def _valid_date(s: str) -> bool:
+    """rules.json の date_range 値が正しい日付形式かを確認する。
+
+    不正な日付が設定されていた場合、その条件を無視（None 扱い）する。
+    これにより、設定ミスで全行が警告になるような誤動作を防ぐ。
+    """
     try:
         datetime.strptime(s, "%Y-%m-%d")
         return True
@@ -83,7 +98,17 @@ def _valid_date(s: str) -> bool:
 
 
 def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[str, str]]]:
-    """
+    """正規化済み行に対してビジネスルールを適用し、警告を生成する。
+
+    処理は2段階に分かれている:
+      1. 行ごとのチェック（カテゴリ、禁止ワード、日付範囲）
+         → 各行を処理しながら日次・月次の累積合計も記録する
+      2. 累積合計によるチェック（日次上限・月次上限）
+         → 全行を処理してから判定する（行単位では判断できないため）
+
+    clean_rows は「fallback モード時にカテゴリを書き換えた後」のデータを含む。
+    上限チェックも書き換え後のカテゴリで行うことで、集計が一貫する。
+
     rows: normalize_ok_rows 済み（row:str, date:str, amount:int, merchant:str, category:str）
     returns:
       clean_rows, warnings
@@ -97,12 +122,13 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
     mode = rules.unknown_category_mode
     fb = rules.fallback_category or "その他"
 
-    # 上限チェック用の合計
+    # 上限チェック用に全行の累積合計を保持する辞書
     by_day_total: dict[str, int] = {}
     by_month_total: dict[str, int] = {}
     by_day_cat: dict[tuple[str, str], int] = {}
     by_month_cat: dict[tuple[str, str], int] = {}
 
+    # rules.json の日付値が不正な場合は None として扱い、その条件をスキップする
     date_min = (
         rules.date_range.min
         if (rules.date_range.min and _valid_date(rules.date_range.min))
@@ -122,15 +148,19 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
         category = r["category"]
         month = date_str[:7]
 
-        # 未登録カテゴリ
+        # 未登録カテゴリのチェック
+        # allowed_categories が空リストの場合はチェックしない（未設定 = 全許可）
         is_unknown = bool(allowed_set) and (category not in allowed_set)
         category_for_clean = category
         category_for_limit = category
 
         if is_unknown:
             if mode == "ignore":
+                # 警告も出さずそのまま通す（ログ不要なケースを想定）
                 pass
             elif mode == "fallback":
+                # 未知カテゴリを fallback_category に置き換えて集計を続ける
+                # 警告は残すことで、後から確認できるようにしている
                 warnings.append(
                     {
                         "kind": "category_unknown",
@@ -159,7 +189,8 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
                     }
                 )
 
-        # 禁止ワード（merchant）
+        # 禁止ワードチェック（加盟店名に含まれているか）
+        # 最初に一致したワードで break することで、複数ヒットしても警告は1件にとどめる
         for w in banned_words:
             if w and (w in merchant):
                 warnings.append(
@@ -176,7 +207,8 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
                 )
                 break
 
-        # 日付範囲（YYYY-MM-DDなので文字比較でOK）
+        # 日付範囲チェック: ISO 8601 形式（YYYY-MM-DD）は辞書順 = 時系列順なので
+        # 文字列のまま比較できる。datetime への変換コストを省ける。
         if date_min and date_str < date_min:
             warnings.append(
                 {
@@ -204,12 +236,12 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
                 }
             )
 
-        # clean_rows（fallbackモードならカテゴリを書き換えた版が入る）
+        # fallback 後のカテゴリでクリーン行を生成する
         r2 = dict(r)
         r2["category"] = category_for_clean
         clean_rows.append(r2)
 
-        # 上限計算
+        # 上限チェック用の累積合計を更新する（行ごとに加算）
         by_day_total[date_str] = by_day_total.get(date_str, 0) + amount
         by_month_total[month] = by_month_total.get(month, 0) + amount
         by_day_cat[(date_str, category_for_limit)] = (
@@ -221,7 +253,9 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
 
     lim = rules.limits
 
-    # 日次合計
+    # 上限チェックは全行の集計が完了してから行う（途中判定では合計が確定しないため）
+
+    # 日次合計の上限チェック
     if lim.daily_total is not None:
         for d, total in sorted(by_day_total.items()):
             if total > lim.daily_total:
@@ -238,7 +272,7 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
                     }
                 )
 
-    # 月次合計
+    # 月次合計の上限チェック
     if lim.monthly_total is not None:
         for m, total in sorted(by_month_total.items()):
             if total > lim.monthly_total:
@@ -255,7 +289,7 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
                     }
                 )
 
-    # カテゴリ日次
+    # カテゴリ別日次上限チェック（カテゴリごとに別の上限を設定できる）
     if lim.category_daily:
         for (d, c), total in sorted(by_day_cat.items()):
             limit_val = lim.category_daily.get(c)
@@ -273,7 +307,7 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
                     }
                 )
 
-    # カテゴリ月次
+    # カテゴリ別月次上限チェック
     if lim.category_monthly:
         for (m, c), total in sorted(by_month_cat.items()):
             limit_val = lim.category_monthly.get(c)

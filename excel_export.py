@@ -26,9 +26,23 @@ def write_xlsx_report(
     clean: list[dict],
     summary: list[dict],
 ) -> None:
+    """Excelレポートを生成して指定パスに保存する。
+
+    シート構成:
+      - Errors   : バリデーションエラー行
+      - Warnings : ビジネスルール違反行
+      - Clean    : 問題なしのクリーン行
+      - Summary  : 集計結果
+      - Charts   : グラフ（月別・カテゴリ別）
+
+    出力先ディレクトリが存在しない場合は自動生成する。
+    Render のような環境ではデプロイ時にディレクトリが存在しない場合があるため、
+    mkdir を明示的に呼んでいる。
+    """
     wb = Workbook()
 
-    # 既定のシートを使い回さず、作り直す
+    # Workbook 作成時に自動生成されるデフォルトシートは不要なので削除する
+    # これをやらないと意図しない空シートが先頭に残ってしまう
     default = wb.active
     wb.remove(default)
 
@@ -52,6 +66,12 @@ def write_xlsx_report(
 
 
 def _add_table_sheet(wb: Workbook, title: str, rows: list[dict], columns: list[str]) -> None:
+    """データをテーブル形式でシートに書き込む。
+
+    ヘッダを太字にし、先頭行をフリーズ、オートフィルタを設定することで
+    Excelで開いたときに操作しやすいレイアウトにしている。
+    列幅は内容に応じて自動調整する（_auto_width）。
+    """
     ws = wb.create_sheet(title)
 
     # header
@@ -66,7 +86,7 @@ def _add_table_sheet(wb: Workbook, title: str, rows: list[dict], columns: list[s
     for r in rows:
         ws.append([r.get(c, "") for c in columns])
 
-    # freeze & filter
+    # 先頭行を固定し、フィルタを有効にする（データ量が多い場合の操作性向上）
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{max(1, ws.max_row)}"
 
@@ -74,6 +94,12 @@ def _add_table_sheet(wb: Workbook, title: str, rows: list[dict], columns: list[s
 
 
 def _auto_width(ws, max_width: int = 60) -> None:
+    """各列の最大文字数に応じて列幅を自動調整する。
+
+    openpyxl はデフォルトで列幅を自動調整しないため、
+    手動でセル内容の最大文字数を計算して適用する。
+    max_width で上限を設けることで、長い文字列による列の過剰な広がりを防ぐ。
+    """
     for col_idx in range(1, ws.max_column + 1):
         letter = get_column_letter(col_idx)
         # 各列の最大文字数（ざっくり）
@@ -94,10 +120,16 @@ def _build_charts(ws, summary: list[dict]) -> None:
     - 月別合計テーブル + 棒グラフ
     - カテゴリ合計テーブル + 円グラフ
     を作る
+
+    summary リストからグラフ用データ（月別・カテゴリ別）を抽出してテーブルを組み立て、
+    openpyxl の Reference でグラフのデータ範囲を指定する。
+    テーブルをシートに書き込んでからそれを参照する構造にすることで、
+    グラフデータが Excel 上でも確認・編集しやすい状態になる。
     """
     ws["A1"] = "Month totals"
     ws["A1"].font = Font(bold=True)
 
+    # summary はフラット構造なので type でフィルタしてグラフ用データを取り出す
     month_rows = [
         (r["key"], int(r["value"]))
         for r in summary
@@ -132,7 +164,7 @@ def _build_charts(ws, summary: list[dict]) -> None:
         chart.dataLabels.showVal = False
         ws.add_chart(chart, "D3")
 
-    # カテゴリ表（A{month_end+3}）
+    # カテゴリ表（月別表の直下に配置）
     row0 = month_end + 3
     ws[f"A{row0}"] = "Category totals"
     ws[f"A{row0}"].font = Font(bold=True)

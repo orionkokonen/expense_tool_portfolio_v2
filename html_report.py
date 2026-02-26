@@ -22,7 +22,17 @@ def write_html_report(
     summary: list[dict],
     title: str = "Expense Tool Report",
 ) -> None:
-    # summary からチャート用データを抽出
+    """HTML形式のレポートファイルを生成して保存する。
+
+    グラフは Chart.js（CDN）を使い、サーバーサイドでの画像生成を不要にしている。
+    これにより、Matplotlib などの依存を増やさずに視覚的なレポートを実現できる。
+
+    Python 側で集計データを json.dumps() して JavaScript 変数に埋め込む設計にすることで、
+    サーバーとクライアントの間でデータを再送する必要がなく、単一のHTMLファイルとして完結する。
+
+    XSS 対策として、ユーザーデータをHTMLに埋め込む箇所では必ず escape() を使用する。
+    """
+    # summary リストから月別・カテゴリ別のデータを取り出してグラフ用に整形する
     month_rows = [
         (r["key"], int(r["value"]))
         for r in summary
@@ -39,7 +49,8 @@ def write_html_report(
     cat_labels = [c for c, _ in cat_rows]
     cat_values = [v for _, v in cat_rows]
 
-    # 表は重くなるので、先頭だけ表示（必要なら数を増やせる）
+    # データ量が多いとHTMLが重くなるため先頭200件に制限する
+    # 完全なデータは CSV ダウンロードから参照できる設計になっている
     errors_head = errors[:200]
     warnings_head = warnings[:200]
     clean_head = clean[:200]
@@ -51,7 +62,7 @@ def write_html_report(
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{escape(title)}</title>
   <style>
-    body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; 
+    body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     margin: 24px; line-height: 1.5; }}
     h1 {{ margin-top: 0; }}
     .grid {{ display: grid; grid-template-columns: 1fr; gap: 16px; }}
@@ -61,7 +72,7 @@ def write_html_report(
     th, td {{ border: 1px solid #eee; padding: 6px 8px; font-size: 14px; }}
     th {{ background: #f7f7f7; text-align: left; }}
     .muted {{ color: #666; font-size: 13px; }}
-    .mono {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", 
+    .mono {{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace; }}
   </style>
 </head>
@@ -87,7 +98,7 @@ def write_html_report(
 
   <div class="card" style="margin-top:16px;">
     <h2>Warnings（先頭200件）</h2>
-    {table_html(warnings_head, ["kind", "row", "date", "month", "category", "merchant", "amount", 
+    {table_html(warnings_head, ["kind", "row", "date", "month", "category", "merchant", "amount",
                                 "message"])}
   </div>
 
@@ -98,6 +109,8 @@ def write_html_report(
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
+    // Python側で json.dumps() したデータをそのままJavaScript変数として埋め込む。
+    // サーバーへの追加リクエストなしにグラフを描画できる。
     const monthLabels = {json.dumps(month_labels)};
     const monthValues = {json.dumps(month_values)};
     const catLabels = {json.dumps(cat_labels)};
@@ -138,6 +151,12 @@ def write_html_report(
 
 
 def table_html(rows: list[dict], columns: list[str]) -> str:
+    """辞書のリストをHTML表に変換する。
+
+    セル値には必ず escape() を適用する。
+    CSVの内容に "<script>" のような文字列が含まれていた場合に
+    HTML として解釈されてしまう XSS を防ぐため。
+    """
     if not rows:
         return "<p class='muted'>（なし）</p>"
 

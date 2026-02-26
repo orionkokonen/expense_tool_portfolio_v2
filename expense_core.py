@@ -42,6 +42,12 @@ class IssueRow(TypedDict):
 
 
 def read_csv(path: str) -> list[dict[str, str]]:
+    """CSVを読み込んで辞書のリストとして返す。
+
+    DictReader を使うことで列名をキーとした辞書形式になり、
+    後工程でのフィールドアクセスが安全になる。
+    encoding="utf-8" を明示するのは、環境依存の文字化けを防ぐため。
+    """
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames is None:
@@ -50,6 +56,11 @@ def read_csv(path: str) -> list[dict[str, str]]:
 
 
 def parse_date(s: str) -> bool:
+    """日付文字列が YYYY-MM-DD 形式かどうかを検証する。
+
+    strptime で厳密にパースすることで "2024-13-01" や "20240101" のような
+    見た目は近いが不正な値を確実に弾く。
+    """
     try:
         datetime.strptime(s, "%Y-%m-%d")
         return True
@@ -58,6 +69,11 @@ def parse_date(s: str) -> bool:
 
 
 def parse_amount(s: str) -> bool:
+    """金額文字列が整数として解釈できるかを検証する。
+
+    float を許容すると "1.5" などが通ってしまい後工程の集計がずれるため、
+    int に限定している。
+    """
     try:
         int(s)
         return True
@@ -67,6 +83,18 @@ def parse_amount(s: str) -> bool:
 
 def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[IssueRow]]:
     """
+    全行に対して基本バリデーションを行い、OK行とエラー行に振り分ける。
+
+    バリデーション項目:
+      - 必須列の存在・空欄チェック
+      - 日付フォーマット（YYYY-MM-DD）
+      - 金額が整数か
+      - date + amount + merchant の組み合わせによる重複検出
+
+    エラーがあった行は errors に、問題なければ ok_rows に追加する。
+    「エラーがある行は後工程から除外する」設計にすることで、
+    ルールチェックや集計が常に正常データだけを扱える。
+
     returns:
       ok_rows: 基本チェックに通った行（row番号つき）
       errors:  問題ある行（理由付き）
@@ -74,6 +102,7 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
     errors: list[IssueRow] = []
     ok_rows: list[ExpenseRow] = []
 
+    # set を使って O(1) で重複を検出する。行数が多くても処理が遅くならない。
     seen: set[tuple[str, str, str]] = set()  # (date, amount, merchant_lower)
 
     for idx, r in enumerate(rows, start=2):  # CSVは1行目がヘッダなので2行目から
@@ -98,7 +127,7 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
         if a and not parse_amount(a):
             reasons.append("金額が数字じゃない")
 
-        # 重複チェック（最低限）
+        # 重複チェック: merchant を小文字に正規化することで大文字・小文字の表記揺れを吸収する
         date_k = (r.get("date") or "").strip()
         amount_k = (r.get("amount") or "").strip()
         merchant_k = (r.get("merchant") or "").strip().lower()
@@ -136,6 +165,12 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
 
 
 def normalize_ok_rows(ok_rows: list[ExpenseRow]) -> list[ExpenseRowNorm]:
+    """バリデーション済み行の型を確定させる（str → int など）。
+
+    check_rows の段階では全フィールドを str のまま保持する。
+    型変換は「正常と確定した後」に行うことで、変換エラーが起きにくい設計にしている。
+    責務を「検証」と「型変換」で分離することで、テストもしやすくなる。
+    """
     out: list[ExpenseRowNorm] = []
     for r in ok_rows:
         out.append(
@@ -151,6 +186,14 @@ def normalize_ok_rows(ok_rows: list[ExpenseRow]) -> list[ExpenseRowNorm]:
 
 
 def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[str, str]]:
+    """正常行をもとに複数軸の集計を行い、フラットなリストとして返す。
+
+    集計軸: 月別合計 / カテゴリ別合計 / 上位N加盟店 / 曜日別合計 / 基本統計
+
+    戻り値を {"type", "key", "value"} のフラット構造にしているのは、
+    CSV や Excel への出力時に形式を統一しやすくするため。
+    defaultdict(int) を使うことで、初出のキーに 0 を自動セットできる。
+    """
     by_month = defaultdict(int)
     by_category = defaultdict(int)
     by_merchant = defaultdict(int)
@@ -164,6 +207,7 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
         merchant = r["merchant"]
         cat = r["category"]
 
+        # 日付の先頭7文字（YYYY-MM）で月を取得。strptime より高速。
         month = date_str[:7]
         wd = datetime.strptime(date_str, "%Y-%m-%d").strftime("%a")  # Mon/Tue...
 
@@ -183,11 +227,13 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
     for c in sorted(by_category.keys()):
         summary.append({"type": "category_total", "key": c, "value": str(by_category[c])})
 
+    # 上位N件に絞ることで、加盟店数が多くてもレポートが肥大化しない
     summary.append({"type": "merchant_top", "key": f"top_{top_n}", "value": "total_amount"})
     merchants_sorted = sorted(by_merchant.items(), key=lambda x: x[1], reverse=True)[:top_n]
     for name, total in merchants_sorted:
         summary.append({"type": "merchant_top", "key": name, "value": str(total)})
 
+    # 曜日を月〜日の順に固定する（辞書のキー順は挿入順なので明示的に並べる）
     order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     summary.append({"type": "weekday_total", "key": "weekday", "value": "total_amount"})
     for wd in order:
@@ -205,6 +251,12 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
 
 
 def write_csv(path: str, rows: list[dict], fieldnames: list[str]) -> None:
+    """辞書のリストを CSV に書き出す。
+
+    extrasaction="ignore" を指定することで、辞書に余分なキーがあっても
+    エラーにならず、fieldnames に指定した列だけを出力できる。
+    newline="" を明示するのは、Windows 環境での改行コード二重挿入を防ぐため。
+    """
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         w.writeheader()
