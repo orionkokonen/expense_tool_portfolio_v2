@@ -130,8 +130,11 @@ with st.sidebar:
     do_html = st.checkbox("Generate HTML report", value=True)
 
     run_upload_btn = st.button("Run with uploaded CSV", type="primary")
-    run_sample_bad_btn = st.button("Run sample_bad.csv")
-    run_sample_good_btn = st.button("Run sample_good.csv")
+    sample_col_bad, sample_col_good = st.columns(2)
+    with sample_col_bad:
+        run_sample_bad_btn = st.button("Run sample_bad.csv", use_container_width=True)
+    with sample_col_good:
+        run_sample_good_btn = st.button("Run sample_good.csv", use_container_width=True)
 
 run_error: str | None = None
 
