@@ -161,6 +161,8 @@ if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
                             do_excel=do_excel,
                             do_html=do_html,
                         )
+                        if result is not None:
+                            result["source_bytes"] = uploaded_csv.getvalue()
             else:
                 sample_csv_path = SAMPLE_BAD_CSV_PATH if run_sample_bad_btn else SAMPLE_GOOD_CSV_PATH
                 if not sample_csv_path.exists():
@@ -174,6 +176,9 @@ if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
                         do_excel=do_excel,
                         do_html=do_html,
                     )
+                    if result is not None:
+                        result["source_path"] = str(sample_csv_path.resolve())
+                        result["source_bytes"] = _read_bytes(sample_csv_path)
         except Exception as exc:
             run_error = f"Run failed: {exc}"
 
@@ -196,6 +201,19 @@ output_paths = {k: Path(v) for k, v in last_run["output_paths"].items()}
 
 st.subheader("Run Result")
 st.write(f"Source: `{last_run['source_name']}`")
+source_path = last_run.get("source_path")
+if source_path:
+    st.caption(f"Path: `{source_path}`")
+
+source_bytes = last_run.get("source_bytes")
+if isinstance(source_bytes, bytes):
+    st.download_button(
+        label="Download source CSV",
+        data=source_bytes,
+        file_name=last_run["source_name"],
+        mime="text/csv",
+        key="download_source_csv",
+    )
 
 col1, col2 = st.columns(2)
 with col1:
