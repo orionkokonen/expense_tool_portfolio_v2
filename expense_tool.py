@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-expense_tool.py
-CLIエントリポイント（コマンドを受け取って処理を実行するだけ）
+expense_tool.py — CLI（コマンドライン）のエントリポイント
+ターミナルからコマンドを受け取り、チェックやレポート生成を実行する。
+GUI（app.py）と同じパイプラインを使っているが、引数の受け取り方が異なる。
 """
 
 from __future__ import annotations
@@ -23,14 +24,15 @@ from rules import apply_rules, load_rules
 
 
 def _ensure_dir(path: Path) -> None:
+    """フォルダがなければ作る（親フォルダも含めて自動作成）。"""
     path.mkdir(parents=True, exist_ok=True)
 
 
 def _stamp_name(base: str, ext: str, ts: str | None) -> str:
-    """
-    base="errors", ext="csv"
-      ts があれば -> "errors_YYYYMMDD_HHMMSS.csv"
-      ts がなければ -> "errors.csv"
+    """出力ファイル名を組み立てる。
+
+    ts（タイムスタンプ）があれば "errors_YYYYMMDD_HHMMSS.csv"、
+    なければ "errors.csv" を返す。
     """
     if ts:
         return f"{base}_{ts}.{ext}"
@@ -38,6 +40,12 @@ def _stamp_name(base: str, ext: str, ts: str | None) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """コマンドライン引数のパーサー（解析器）を組み立てて返す。
+
+    サブコマンド:
+      check  — 入力チェックのみ実行（errors / warnings を出力）
+      report — チェック＋レポートを全部出力（CSV / Excel / HTML）
+    """
     p = argparse.ArgumentParser(
         prog="expense_tool",
         description="経費CSVをチェックしてレポートを出すツール（ポートフォリオ）",
@@ -62,7 +70,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def datetime_now_stamp() -> str:
-    # ファイル名に安全な形式にする
+    """現在日時をファイル名に使える文字列（YYYYMMDD_HHMMSS）で返す。
+
+    スラッシュやコロンはファイル名に使えないため、この形式に変換する。
+    """
     import datetime as _dt
 
     now = _dt.datetime.now()
@@ -70,6 +81,12 @@ def datetime_now_stamp() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI のメイン処理。引数を解析して check または report を実行する。
+
+    戻り値:
+      0 — エラーなし
+      2 — 入力チェックエラーあり（CI などでエラー検知に使える）
+    """
     argv = argv if argv is not None else sys.argv[1:]
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -77,36 +94,32 @@ def main(argv: list[str] | None = None) -> int:
     csv_path = Path(args.csv_path)
     rules_path = Path(args.rules)
 
-    # 入力CSVごとに分ける（sample_bad / sample_good など）
+    # 入力 CSV のファイル名（拡張子なし）を出力フォルダの一部に使う
     input_name = csv_path.stem
 
-    # 出力の大元
     base_out = Path(args.out)
 
-    # timestamp の有無で保存先を変える
-    #   timestampあり: out/history/<input_name>/
-    #   timestampなし: out/latest/<input_name>/  (上書き運用)
+    # --timestamp あり: 履歴として残す（out/history/<入力名>/）
+    # --timestamp なし: 常に同じ場所に上書き（out/latest/<入力名>/）
     bucket = "history" if args.timestamp else "latest"
     out_dir = base_out / bucket / input_name
     _ensure_dir(out_dir)
 
-    # timestamp ありのときだけファイル名に付ける
+    # --timestamp ありのときだけファイル名に日時を付ける
     ts = datetime_now_stamp() if args.timestamp else None
 
-    # 1) 取り込み
+    # 1) CSV 読み込み
     rows = read_csv(str(csv_path))
 
-    # 2) 構造チェック（必須列、日付形式、金額、重複など） -> errors
+    # 2) 基本入力チェック（必須列・日付・金額・重複） → errors / ok_rows
     ok_rows, errors = check_rows(rows)
 
-    # 3) ルールチェック（カテゴリ許可、禁止ワード、日付範囲、上限など） -> warnings
+    # 3) 社内ルールチェック（カテゴリ・禁止ワード・日付範囲・上限） → warnings
     rules = load_rules(rules_path)
     ok_norm = normalize_ok_rows(ok_rows)
-
-    # apply_rules は (clean_rows, warnings) を返す前提
     clean_rows, warnings = apply_rules(ok_norm, rules)
 
-    # 4) 出力ファイル名（フォルダで分けるので prefix は不要）
+    # 4) 出力ファイルパスを組み立てる（フォルダで分けているので prefix は不要）
     errors_csv = out_dir / _stamp_name("errors", "csv", ts)
     warnings_csv = out_dir / _stamp_name("warnings", "csv", ts)
     clean_csv = out_dir / _stamp_name("clean", "csv", ts)
@@ -114,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     xlsx_path = out_dir / _stamp_name("report", "xlsx", ts)
     html_path = out_dir / _stamp_name("report", "html", ts)
 
-    # 5) check は errors/warnings だけ
+    # 5) check サブコマンド: errors / warnings だけ出力して終了
     if args.cmd == "check":
         write_csv(
             str(errors_csv), errors, ["row", "date", "amount", "merchant", "category", "reason"]
@@ -130,10 +143,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  errors:   {errors_csv}（件数: {len(errors)}）")
         print(f"  warnings: {warnings_csv}（件数: {len(warnings)}）")
 
-        # 終了コード：エラーがあれば 2、なければ 0
+        # 終了コード: エラーがあれば 2（CI でエラー検知に使える）、なければ 0
         return 2 if len(errors) > 0 else 0
 
-    # 6) report は全部出す（集計は clean_rows を使う）
+    # 6) report サブコマンド: 集計して全ファイルを出力する
     summary = make_summary(clean_rows, top_n=args.top_n)
 
     write_csv(str(errors_csv), errors, ["row", "date", "amount", "merchant", "category", "reason"])
@@ -145,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     write_csv(str(clean_csv), clean_rows, ["row", "date", "amount", "merchant", "category"])
     write_csv(str(summary_csv), summary, ["type", "key", "value"])
 
-    # Excel / HTML
+    # Excel / HTML レポートを生成する
     write_xlsx_report(
         path=xlsx_path,
         errors=errors,

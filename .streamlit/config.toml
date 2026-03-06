@@ -1,2 +1,4 @@
 [server]
+# headless = true: ブラウザを自動で開かない設定。
+# Render などのサーバー環境ではブラウザがないため、true にしないと起動エラーになる。
 headless = true

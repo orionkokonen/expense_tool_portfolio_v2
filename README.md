@@ -1,203 +1,174 @@
 # Expense Tool（経費CSVチェック＆レポート生成）
 
-経費データ（CSV）を読み込み、**エラー（errors）** と **警告（warnings）** を検知し、  
-CSV / Excel（.xlsx）/ HTML のレポートを出力する CLI ツールです（ポートフォリオ）。
+経費データの CSV ファイルを読み込み、**エラー（errors）** と **警告（warnings）** を自動検知して
+CSV / Excel / HTML の 3 種類でレポートを出力するツールです。
+
+操作方法は 2 種類：
+- **CLI**（コマンドライン）：ターミナルにコマンドを打って実行
+- **GUI**（Streamlit）：ブラウザの画面から CSV をアップロードしてボタンで実行
 
 ---
 
-## これは何？
+## このアプリでできること
 
-経費CSVをチェックして、次を出します。
-
-- **errors（エラー）**：データの構造・形式として「成立していない」もの  
-  例）必須列がない、空欄、日付形式が違う、金額が数字でない、重複 など
-- **warnings（警告）**：データは成立しているが「社内ルール違反」になりうるもの  
-  例）カテゴリ未登録、禁止ワード、日付範囲外、上限超え など
-
-さらに `report` では、OK行（clean）や集計（summary）、Excel/HTMLレポートまで作ります。
+- 経費 CSV の **形式チェック**（空欄・日付・金額・重複）
+- **社内ルール違反の検出**（カテゴリ未登録・禁止ワード・上限超え）
+- **集計レポート**の生成（月別 / カテゴリ別 / 上位加盟店 / 曜日別）
+- チェック結果を **CSV / Excel / HTML** の 3 形式で出力
+- GUI でサクッと試せる、ブラウザからダウンロードもできる
+- 終了コードで CI / バッチ連携にも対応（エラーあり→コード 2）
 
 ---
 
-## できること（機能一覧）
+## 全体の処理の流れ（最重要）
 
-### コマンド
+```
+CSVファイル
+    ↓
+① read_csv         — CSV を読み込んで辞書のリストにする
+    ↓
+② check_rows       — 基本入力チェック（形式・空欄・重複など）
+    ↓
+  ┌─────────────────────────────────┐
+  │ errors（エラー行）                │← 形式が壊れていて処理できない行
+  │ ok_rows（OK行）                  │← 次のステップへ進む行
+  └─────────────────────────────────┘
+    ↓ ok_rows のみ
+③ normalize_ok_rows — 文字列 → 整数など型を確定させる
+    ↓
+④ load_rules        — rules.json から社内ルールを読み込む
+    ↓
+⑤ apply_rules       — 社内ルール違反を検出する
+    ↓
+  ┌─────────────────────────────────┐
+  │ warnings（警告行）               │← ルール違反の情報
+  │ clean_rows（クリーン行）          │← 最終的な正常データ
+  └─────────────────────────────────┘
+    ↓ clean_rows を使う
+⑥ make_summary      — 月別・カテゴリ別・加盟店別などを集計する
+    ↓
+⑦ 出力              — CSV / Excel / HTML に書き出す
+```
 
-- `check`：`errors.csv` / `warnings.csv` を出力
-- `report`：`errors/warnings/clean/summary` + **Excel(.xlsx)** + **HTMLレポート** を出力
-
-### オプション
-
-- `--rules rules.json`：ルールファイルを指定（既定: `rules.json`）
-- `--out out`：出力先フォルダを指定（既定: `out`）
-- `--timestamp`：ファイル名に日時を付けて履歴を残す（例：`..._20260203_104530.csv`）
-- `--top-n 10`：merchant上位集計の件数（既定: 10）
-
-### 終了コード（重要）
-
-- **errors が 0 件** → 終了コード `0`
-- **errors が 1 件以上** → 終了コード `2`  
-  （バッチ処理やCIで “失敗を検知できる” ようになります）
+**ポイント：** エラー行は②で除外されるので、ルールチェックと集計は「正常データだけ」を扱える設計になっています。
 
 ---
 
-## 必要なもの
+## データの流れ（入力 → 処理 → 出力）
 
-- Python 3.10+
-- Excel出力に `openpyxl`
-
----
-
-## インストール
-
-通常（実行に必要な最小構成）：
-
-```bash
-python -m pip install -r requirements.txt
 ```
+[入力] expenses.csv
+  date,amount,merchant,category
+  2026-01-10,1200,A社,交通費
+  2026/01/10,500,B社,消耗品      ← 日付形式が違う → errors へ
+  2026-01-11,99999,C社,ギャンブル ← 禁止ワード    → warnings へ
 
-開発用（テスト/整形/型チェックなど）：
+         ↓ check_rows + apply_rules
 
-```bash
-python -m pip install -r requirements-dev.txt
-```
-
----
-
-## 最速の使い方
-
-### 1) ルールファイルを作る
-
-サンプルをコピーして `rules.json` を用意します。
-
-・Windows（コマンドプロンプト)
-
-```bat
-copy rules.sample.json rules.json
-```
-
-・Windows（PowerShell）
-
-```powershell
-Copy-Item rules.sample.json rules.json
-```
-
-・Mac / Linux
-
-```bash
-cp rules.sample.json rules.json
-```
-
-### 2) サンプルCSVで実行
-
-チェックだけ（CSV出力）：
-
-```bash
-python expense_tool.py check data/sample_bad.csv --rules rules.json
-```
-
-全部レポート（CSV + Excel + HTML）：
-
-```bash
-python expense_tool.py report data/sample_bad.csv --rules rules.json
-```
-
-日時つきで履歴を残したい場合：
-
-```bash
-python expense_tool.py report data/sample_bad.csv --rules rules.json --timestamp
+[出力ファイル]
+  errors.csv   → 形式エラーがある行（まず修正が必要）
+  warnings.csv → 社内ルール違反の行（人間が確認・承認）
+  clean.csv    → 問題なしのクリーンな行
+  summary.csv  → 月別合計・カテゴリ別合計などの集計結果
+  report.xlsx  → 上記 4 つ + グラフをまとめた Excel
+  report.html  → ブラウザで見られるグラフつきレポート
 ```
 
 ---
 
-## GUIで実行（app.py / Streamlit）
-1) 起動
-streamlit run app.py
+## 画面・機能の一覧
 
+### CLI（コマンドライン：expense_tool.py）
 
-起動するとターミナルにURL（例：http://localhost:8501）が出るので、ブラウザで開きます。
+| コマンド | 出力されるもの |
+|---|---|
+| `check` | errors.csv / warnings.csv |
+| `report` | 上記 + clean.csv / summary.csv / report.xlsx / report.html |
 
-2) GUIでできること（想定）
+主なオプション：
 
-入力CSV（例：data/sample_bad.csv）を選ぶ or アップロードする
+| オプション | 意味 |
+|---|---|
+| `--rules rules.json` | 使うルールファイルを指定（既定: rules.json） |
+| `--out out` | 出力先フォルダを指定（既定: out） |
+| `--timestamp` | ファイル名に日時を付けて履歴として残す |
+| `--top-n 10` | 上位加盟店の表示件数（既定: 10） |
 
-rules.json を指定する
+### GUI（ブラウザ：app.py / Streamlit）
 
-check / report をボタンで実行する
-
-errors / warnings / clean / summary を画面で確認する
-
-必要ならファイル出力（CSV / Excel / HTML）を作る
-
-※ GUIは「CLIが難しい人でも使える」を示すための拡張です。
-本体のロジックは CLI と同じモジュール（expense_core.py / rules.py）を使う想定です。
-
-
-## 出力について（重要：迷わないための説明）
-
-### ✅ 入力CSVごとに出力フォルダが分かれる
-
-入力が `data/sample_bad.csv` なら prefix は `sample_bad` になり、出力先はこうなります：
-
-- `out/latest/sample_bad/errors.csv`
-- `out/latest/sample_bad/warnings.csv`
-- `out/latest/sample_bad/clean.csv`
-- `out/latest/sample_bad/summary.csv`
-- `out/latest/sample_bad/report.xlsx`
-- `out/latest/sample_bad/report.html`
-
-入力が `data/sample_good.csv` なら `out/latest/sample_good/` に出ます。
-
-### ✅ `--timestamp` のメリット
-
-`--timestamp` を付けると、ファイル名に日時が付き、履歴を残せます。
-
-例：
-
-- `out/latest/sample_bad/report_20260203_104530.xlsx`
-- `out/latest/sample_bad/report_20260203_105012.xlsx`
-
-### ⚠ `--timestamp` を付けるとファイルは増えます
-
-「毎回増える」のは仕様です（履歴を残すため）。  
-増やしたくないなら `--timestamp` を外してください。
+| 操作 | 内容 |
+|---|---|
+| CSV アップロード | ブラウザから CSV ファイルを選んでアップロード |
+| サンプル実行 | `sample_bad.csv` / `sample_good.csv` をワンクリックで試せる |
+| 出力設定 | Excel / HTML の生成有無をチェックボックスで選択 |
+| 結果表示 | errors / warnings / summary の一覧を画面に表示 |
+| ダウンロード | 生成した全ファイルをブラウザからダウンロード |
 
 ---
 
-## 入力CSVの形式
+## フォルダ・主要ファイルの役割
 
-ヘッダ（1行目）に次の列が必要です：
+```
+expense_tool_portfolio_v2/
+│
+├── app.py              ← Streamlit の GUI 画面（ブラウザで操作する入口）
+├── expense_tool.py     ← CLI の入口（コマンドを受け取って処理を起動する）
+│
+├── expense_core.py     ← 処理の中心：CSV 読み込み / 基本チェック / 集計 / CSV 出力
+├── rules.py            ← rules.json を読み込み、社内ルール違反を検出する
+├── excel_export.py     ← Excel（.xlsx）レポートを生成する
+├── html_report.py      ← HTML レポートを生成する（グラフ付き）
+│
+├── rules.json          ← 社内ルールの設定ファイル（コードを変えずにルール変更できる）
+├── rules.sample.json   ← rules.json のサンプル（最初にコピーして使う）
+│
+├── data/
+│   ├── sample_bad.csv  ← わざとミスを入れたテスト用データ
+│   └── sample_good.csv ← 正常データの例
+│
+├── tests/
+│   └── test_core.py    ← pytest の単体テスト
+│
+├── .github/workflows/
+│   └── ci.yml          ← GitHub Actions の CI 設定（push/PR のたびに自動テスト）
+│
+├── render.yaml         ← Render へのデプロイ設定
+├── .streamlit/
+│   └── config.toml     ← Streamlit のサーバー設定（headless = true）
+│
+├── requirements.txt        ← 実行に必要なライブラリ（openpyxl, streamlit）
+└── requirements-dev.txt    ← 開発用ライブラリ（pytest, ruff, mypy など）
+```
 
-- `date`
-- `amount`
-- `merchant`
-- `category`
+---
 
-推奨ルール：
+## 入力 CSV の形式
 
-- date：`YYYY-MM-DD`
-- amount：整数（例：`1200`）  
-  ※ `1,200` はNG（`int()` にできない)
+1 行目にヘッダが必要です。列の順番は問いません。
+
+```csv
+date,amount,merchant,category
+2026-01-10,1200,A社,交通費
+2026-01-11,3500,B社,交際費
+```
+
+| 列名 | 形式 | NG の例 |
+|---|---|---|
+| `date` | `YYYY-MM-DD` | `2026/01/10`（スラッシュ）`2026-13-01`（存在しない日付） |
+| `amount` | 整数のみ | `1,200`（カンマ入り）`1.5`（小数）`abc`（文字） |
+| `merchant` | 文字列（空欄 NG） | 空白のみ |
+| `category` | 文字列（空欄 NG） | 空白のみ |
 
 ---
 
 ## ルールファイル（rules.json）の説明
 
-`rules.json` で「会社の運用ルール」を変更できます  
-（コードを書き換えずに運用変更できるのが強み）。
-
-例：
+「コードを書き換えずに運用ルールを変えられる」のがポイントです。
+`rules.sample.json` をコピーして `rules.json` を作り、必要な部分だけ変更してください。
 
 ```json
 {
-  "allowed_categories": [
-    "交通費",
-    "交際費",
-    "消耗品費",
-    "会議費",
-    "旅費",
-    "通信費",
-    "その他"
-  ],
+  "allowed_categories": ["交通費", "交際費", "消耗品費", "会議費", "旅費", "通信費", "その他"],
   "unknown_category_mode": "warn",
   "fallback_category": "その他",
   "banned_words": ["ギャンブル", "パチンコ", "競馬"],
@@ -211,105 +182,149 @@ errors / warnings / clean / summary を画面で確認する
 }
 ```
 
-### unknown_category_mode（超重要）
+### unknown_category_mode の選択肢
 
-`allowed_categories` に無いカテゴリが来た時の扱いを決めます。
-
-- `"warn"`：警告を出し、`fallback_category` に置換して clean に入れる（おすすめ）
-- `"error"`：ルール違反を「エラー扱い」にする（厳格運用向け）
-- `"off"`：カテゴリ未登録でも何もしない（運用ゆるめ）
+| 値 | 動作 |
+|---|---|
+| `"warn"` | 警告を出して `fallback_category` に置き換える（おすすめ） |
+| `"ignore"` | 警告も出さずそのまま通す |
+| `"fallback"` | `fallback_category` に置き換えて警告も出す |
 
 ---
 
 ## errors と warnings の違い
 
-- **errors**：形式が壊れていて「集計できない」レベル  
-  → まず直さないと処理が進まない
-- **warnings**：形式はOKだが「会社ルールに違反の可能性」  
-  → 人間が確認して修正・承認判断するための情報
-
-この分離によって、「データ品質」と「運用ルール」を混ぜずに扱える設計になっています。
-
----
-
-## Excel / HTML レポートの中身
-
-`report` コマンドで以下が出ます：
-
-- Excel：`out/latest/<prefix>/report.xlsx`
-  - `Errors / Warnings / Clean / Summary`
-  - `Charts`（実装によりシートが存在し、グラフ表示も可能）
-- HTML：`out/latest/<prefix>/report.html`
-  - ブラウザで見られるレポート（グラフ付き）
+| | errors | warnings |
+|---|---|---|
+| 意味 | 形式が壊れていて集計できない | 形式は OK だが社内ルール違反の可能性 |
+| 例 | 空欄・日付形式違い・金額が数字でない | カテゴリ未登録・禁止ワード・上限超え |
+| 対応 | まず直す（処理が進まない） | 人間が確認して修正・承認判断 |
+| その後 | 後工程から除外される | clean_rows には残る（警告として記録） |
 
 ---
 
-## サンプル
+## 出力ファイルの構成
 
-- `data/sample_good.csv`：正常データ例
-- `data/sample_bad.csv`：わざとミスを入れたテスト用データ
+入力が `data/sample_bad.csv` の場合、出力先は以下になります：
 
-### sample_bad.csv に入れているミス例
+```
+out/
+└── latest/
+    └── sample_bad/
+        ├── errors.csv
+        ├── warnings.csv
+        ├── clean.csv
+        ├── summary.csv
+        ├── report.xlsx
+        └── report.html
+```
 
-- `2026/01/06`（日付の形式が違う）
-- `2026-13-01`（存在しない日付）
-- `1,200`（カンマ入りで `int` にできない）
-- `abc`（数字じゃない）
-- 日付空欄 / merchant空欄 / category空欄
-- 重複（同じ date+amount+merchant）
-- merchant の大文字小文字違い（Amazon と amazon）
+`--timestamp` を付けると `out/history/sample_bad/errors_20260203_104530.csv` のように
+日時が付いて上書きされずに履歴として残ります。
+
+---
+
+## Render デプロイのポイント
+
+このアプリは **データベースなし**（CSV ファイルを直接処理する設計）です。
+
+### render.yaml の主要設定
+
+```yaml
+buildCommand: pip install -r requirements.txt     # デプロイ時にライブラリをインストール
+startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
+```
+
+| 設定 | 説明 |
+|---|---|
+| `$PORT` | Render が自動で割り当てるポート番号。固定できないので環境変数で受け取る |
+| `--server.address 0.0.0.0` | 外部（ブラウザ）からアクセスできるようにするため必須 |
+| `PYTHONUNBUFFERED=1` | ログをバッファリングせず即時出力する（デバッグしやすくなる） |
+
+### headless = true（.streamlit/config.toml）
+
+Render などのサーバー環境にはブラウザがないため、Streamlit が自動でブラウザを開こうとすると起動エラーになります。`headless = true` でその動作を無効化しています。
+
+### ⚠ ファイルの永続化について
+
+Render の無料プランでは **デプロイのたびにファイルシステムがリセット**されます。
+`out/` フォルダに書き出したファイルはサーバー上では消えてしまうため、
+**GUI のダウンロードボタンからすぐに取得**するのが正しい使い方です。
+
+---
+
+## ローカル起動手順
+
+### 準備
+
+```bash
+# 1. ライブラリをインストール
+python -m pip install -r requirements.txt
+
+# 2. rules.json を用意（サンプルをコピー）
+# Mac / Linux
+cp rules.sample.json rules.json
+# Windows（コマンドプロンプト）
+copy rules.sample.json rules.json
+```
+
+### CLI で実行
+
+```bash
+# チェックだけ（errors / warnings を出力）
+python expense_tool.py check data/sample_bad.csv --rules rules.json
+
+# 全部レポート（CSV + Excel + HTML）
+python expense_tool.py report data/sample_bad.csv --rules rules.json
+
+# タイムスタンプつきで履歴を残す
+python expense_tool.py report data/sample_bad.csv --rules rules.json --timestamp
+```
+
+### GUI で実行
+
+```bash
+streamlit run app.py
+```
+
+ターミナルに `http://localhost:8501` と表示されたらブラウザで開いてください。
 
 ---
 
 ## よくあるトラブル（FAQ）
 
-### Q1. Excel出力でエラーが出た（PermissionErrorっぽい）
+**Q. Excel 出力でエラーになる（PermissionError）**
+A. 生成した `.xlsx` を Excel で開いたまま再実行すると失敗します。Excel を閉じてから実行してください。
 
-A. 生成した `.xlsx` をExcelで開いたままだと、上書き保存できず失敗します。  
-Excelを閉じてからもう一度実行してください。
+**Q. `pip install` でエラーになる**
+A. `python -m pip install -r requirements-dev.txt` のように `python -m` を付けると安定します。
 
-### Q2. `pip install -r ...` が変なエラーになった
+**Q. `--timestamp` でファイルが増え続ける**
+A. 仕様です。履歴を残すため毎回新しいファイル名になります。増やしたくない場合は `--timestamp` を外してください。
 
-A. `python -m pip ...` を使うと安定します。
+---
+
+## テスト・品質チェック
 
 ```bash
-python -m pip install -r requirements-dev.txt
+# テスト実行
+pytest -q
+
+# コードの書き方チェック（静的チェック）
+ruff check .
+
+# 型チェック
+mypy .
 ```
 
-### Q3. `--timestamp` で out にファイルが増え続ける
-
-A. 仕様です。履歴を残すために毎回新しいファイル名になります。  
-増やしたくない場合は `--timestamp` を付けないでください。
+GitHub に push すると `.github/workflows/ci.yml` が自動で上記 3 つを実行します（Python 3.10〜3.13 の 4 バージョンで）。
 
 ---
-
-## プロジェクト構成（ざっくり）
-
-- `expense_tool.py`：CLI入口（引数解析・入出力）
-- `expense_core.py`：CSV読み込み・基本チェック（errors）・集計・CSV出力
-- `rules.py`：rules.json 読み込みとルール適用（warnings生成）
-- `excel_export.py`：Excelレポート出力
-- `html_report.py`：HTMLレポート出力
-- `data/`：サンプルCSV
-- `out/`：出力先
-- `tests/`：pytest
-
----
-
-## これを作った意図
-
-- 構造エラー（errors） と 運用ルール違反（warnings） を分離して設計した
-- ルールを `rules.json` に外部化し、「運用変更＝コード変更」にならないようにした
-- 出力を CSV / Excel / HTML に分け、用途別に見やすくした
-- 終了コードを整備し、バッチやCIに組み込める形にした
 
 ## コンソール出力（例）
 
-例：コマンドプロンプトで以下を実行
-
-```bat
-python expense_tool.py report data/sample_bad.csv --rules rules.json
-
+```
+$ python expense_tool.py report data/sample_bad.csv --rules rules.json
 
 レポート作成完了
   出力先: out\latest\sample_bad
@@ -321,29 +336,3 @@ python expense_tool.py report data/sample_bad.csv --rules rules.json
   html:     out\latest\sample_bad\report.html
   全体: 11 / OK: 3 / エラー: 8 / 警告: 1
 ```
-
----
-
-## GUI update (A/B): sample run + downloads
-
-### New sidebar actions
-
-- `Run with uploaded CSV`: runs validation/report flow for the uploaded file.
-- `Run sample_bad.csv`: runs `data/sample_bad.csv` without any upload.
-
-### Download outputs from the browser
-
-After each run, the app now shows direct download buttons:
-
-- `errors.csv`
-- `warnings.csv`
-- `clean.csv`
-- `summary.csv`
-- `report.xlsx` (when Excel output is enabled)
-- `report.html` (when HTML output is enabled)
-
-If a file cannot be read, the app shows a warning instead of a broken button.
-
-### State persistence
-
-The GUI stores the latest run in `st.session_state["last_run"]`, so result tables and download buttons remain visible after Streamlit reruns.

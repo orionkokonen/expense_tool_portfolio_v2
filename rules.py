@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-rules.py
-rules.json を読み込み、正規化済みOK行（normalize_ok_rowsの出力）に対して
-「社内ルール違反」を warnings として返す。
-
-apply_rules は (clean_rows, warnings) を返す。
-- clean_rows: fallbackモードのときカテゴリを書き換えた版
-- warnings: kind,row,date,month,category,merchant,amount,message
+rules.py — 社内ルールの読み込みと適用
+rules.json を読み込み、入力チェック済みの行に対して「社内ルール違反」を検出する。
+違反は warnings として返し、clean_rows にはカテゴリ書き換え後のデータを入れる。
 """
 
 from __future__ import annotations
@@ -17,14 +13,19 @@ from datetime import datetime
 from pathlib import Path
 
 
+# --- データクラス（設定値をまとめて管理する構造体）---
+# frozen=True にすることで処理中に値が書き換えられないよう「読み取り専用」にしている
+
 @dataclass(frozen=True)
 class DateRange:
+    """日付の有効範囲（rules.json の date_range に対応）。"""
     min: str | None = None  # "YYYY-MM-DD"
     max: str | None = None  # "YYYY-MM-DD"
 
 
 @dataclass(frozen=True)
 class Limits:
+    """金額の上限設定（rules.json の limits に対応）。"""
     daily_total: int | None = None
     monthly_total: int | None = None
     category_daily: dict[str, int] | None = None
@@ -33,6 +34,7 @@ class Limits:
 
 @dataclass(frozen=True)
 class Rules:
+    """rules.json の全設定をまとめたデータクラス。"""
     allowed_categories: list[str] | None = None
     unknown_category_mode: str = "warn"  # "warn" | "ignore" | "fallback"
     fallback_category: str | None = None
@@ -44,12 +46,8 @@ class Rules:
 def load_rules(path: Path) -> Rules:
     """rules.json を読み込み、Rules データクラスに変換して返す。
 
-    不正な値（例: unknown_category_mode に想定外の文字列）が設定されていた場合は、
-    エラーを出さずに安全なデフォルト値（"warn"）へフォールバックする。
-    これにより、設定ファイルの記述ミスでアプリが止まることを防ぐ。
-
-    frozen=True のデータクラスを使うのは、ルール設定が処理中に
-    意図せず変更されないよう不変（immutable）にするため。
+    unknown_category_mode に想定外の値が入っていた場合は "warn" に戻す。
+    設定ファイルの記述ミスでアプリが止まらないようにするための安全策。
     """
     data = json.loads(path.read_text(encoding="utf-8"))
 
@@ -87,8 +85,8 @@ def load_rules(path: Path) -> Rules:
 def _valid_date(s: str) -> bool:
     """rules.json の date_range 値が正しい日付形式かを確認する。
 
-    不正な日付が設定されていた場合、その条件を無視（None 扱い）する。
-    これにより、設定ミスで全行が警告になるような誤動作を防ぐ。
+    不正な日付が設定されていた場合はその条件をスキップする（None 扱い）。
+    設定ミスで全行が警告になるような誤動作を防ぐ。
     """
     try:
         datetime.strptime(s, "%Y-%m-%d")
@@ -98,20 +96,17 @@ def _valid_date(s: str) -> bool:
 
 
 def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[str, str]]]:
-    """正規化済み行に対してビジネスルールを適用し、警告を生成する。
+    """正規化済み行に対して社内ルールを適用し、警告を生成する。
 
-    処理は2段階に分かれている:
-      1. 行ごとのチェック（カテゴリ、禁止ワード、日付範囲）
+    処理は2段階:
+      1. 行ごとのチェック（カテゴリ・禁止ワード・日付範囲）
          → 各行を処理しながら日次・月次の累積合計も記録する
-      2. 累積合計によるチェック（日次上限・月次上限）
-         → 全行を処理してから判定する（行単位では判断できないため）
+      2. 全行集計後の上限チェック（日次・月次の合計上限）
+         → 全行を処理してから判定する（途中では合計が確定しないため）
 
-    clean_rows は「fallback モード時にカテゴリを書き換えた後」のデータを含む。
-    上限チェックも書き換え後のカテゴリで行うことで、集計が一貫する。
-
-    rows: normalize_ok_rows 済み（row:str, date:str, amount:int, merchant:str, category:str）
-    returns:
-      clean_rows, warnings
+    戻り値:
+      clean_rows — fallback モード時はカテゴリを書き換えたデータ
+      warnings   — 違反内容の一覧
     """
     warnings: list[dict[str, str]] = []
     clean_rows: list[dict] = []
@@ -149,18 +144,18 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
         month = date_str[:7]
 
         # 未登録カテゴリのチェック
-        # allowed_categories が空リストの場合はチェックしない（未設定 = 全許可）
+        # allowed_categories が空リストの場合はチェックしない（未設定 = 全カテゴリ許可）
         is_unknown = bool(allowed_set) and (category not in allowed_set)
         category_for_clean = category
         category_for_limit = category
 
         if is_unknown:
             if mode == "ignore":
-                # 警告も出さずそのまま通す（ログ不要なケースを想定）
+                # 警告も出さずそのまま通す
                 pass
             elif mode == "fallback":
-                # 未知カテゴリを fallback_category に置き換えて集計を続ける
-                # 警告は残すことで、後から確認できるようにしている
+                # 未知カテゴリを fallback_category に置き換えて集計を続ける。
+                # 警告は残すことで、後から確認できるようにしている。
                 warnings.append(
                     {
                         "kind": "category_unknown",
@@ -207,8 +202,7 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
                 )
                 break
 
-        # 日付範囲チェック: ISO 8601 形式（YYYY-MM-DD）は辞書順 = 時系列順なので
-        # 文字列のまま比較できる。datetime への変換コストを省ける。
+        # 日付範囲チェック: YYYY-MM-DD 形式は文字列のまま辞書順で比較できる
         if date_min and date_str < date_min:
             warnings.append(
                 {
@@ -253,7 +247,7 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
 
     lim = rules.limits
 
-    # 上限チェックは全行の集計が完了してから行う（途中判定では合計が確定しないため）
+    # 以下の上限チェックは全行の集計が完了してから行う（途中では合計が確定しないため）
 
     # 日次合計の上限チェック
     if lim.daily_total is not None:

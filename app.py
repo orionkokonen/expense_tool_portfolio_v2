@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Streamlit GUI for Expense Tool."""
+"""
+app.py — Streamlit の GUI 画面
+CSV をアップロードして「入力チェック＋レポート生成」を実行し、結果を画面に表示する。
+expense_core / rules / excel_export / html_report の各処理をここでまとめて呼び出す。
+"""
 
 from __future__ import annotations
 
@@ -14,9 +18,8 @@ from excel_export import write_xlsx_report
 from html_report import write_html_report
 from rules import apply_rules, load_rules
 
-# Streamlit のセッション間でパイプライン結果を保持するためのキー
-# st.session_state を使うことで、ボタン押下後にページが再レンダリングされても
-# 結果が消えずに表示し続けられる
+# ページをリロードしても結果が消えないよう、セッションに保存するときのキー名
+# st.session_state は Streamlit の「ページをまたいで値を保持する仕組み」
 LAST_RUN_KEY = "last_run"
 SAMPLE_BAD_CSV_PATH = Path("data/sample_bad.csv")
 SAMPLE_GOOD_CSV_PATH = Path("data/sample_good.csv")
@@ -27,14 +30,15 @@ st.title("Expense Tool - CSV Check + Report")
 
 
 def _ensure_dir(path: Path) -> None:
+    """フォルダがなければ作る（親フォルダも含めて自動作成）。"""
     path.mkdir(parents=True, exist_ok=True)
 
 
 def _save_upload(uploaded_file, dir_path: Path) -> Path:
-    """アップロードされたファイルを一時ディレクトリに保存してパスを返す。
+    """アップロードファイルを一時フォルダに保存してパスを返す。
 
-    Streamlit のアップロードオブジェクトはメモリ上のバッファなので、
-    ファイルパスを必要とする処理（csv.reader など）のために一度ディスクに書き出す。
+    Streamlit のアップロードオブジェクトはメモリ上のデータなので、
+    ファイルパスを必要とする処理のために一度ディスクに書き出す。
     """
     path = dir_path / uploaded_file.name
     path.write_bytes(uploaded_file.getbuffer())
@@ -42,6 +46,7 @@ def _save_upload(uploaded_file, dir_path: Path) -> Path:
 
 
 def _stamp_name(prefix: str, base: str, ext: str) -> str:
+    """「プレフィックス_ベース名.拡張子」形式のファイル名を組み立てる。"""
     return f"{prefix}_{base}.{ext}"
 
 
@@ -54,18 +59,18 @@ def _run_pipeline(
     do_excel: bool,
     do_html: bool,
 ) -> dict[str, Any]:
-    """CSVチェックからレポート生成までの一連の処理をまとめたパイプライン関数。
+    """CSV 入力チェックからレポート生成までを一気に実行するパイプライン。
 
     処理の流れ:
-      1. CSV読み込み（read_csv）
-      2. 基本バリデーション（check_rows） → errors / ok_rows に振り分け
-      3. ルール設定の読み込み（load_rules）
-      4. 型の正規化（normalize_ok_rows）
-      5. ビジネスルール適用（apply_rules） → clean_rows / warnings に振り分け
-      6. 集計（make_summary）
-      7. 各種ファイルへの書き出し（CSV / Excel / HTML）
+      1. CSV 読み込み
+      2. 基本チェック（errors / ok_rows に振り分け）
+      3. ルール設定の読み込み
+      4. 型の正規化（文字列 → 数値など）
+      5. 社内ルール適用（clean_rows / warnings に振り分け）
+      6. 集計
+      7. CSV / Excel / HTML へ書き出し
 
-    Keyword-only 引数（*）を使うことで、呼び出し元での引数の順序ミスを防いでいる。
+    引数をすべてキーワード引数（*）にしているのは、呼び出し時の順序ミスを防ぐため。
     """
     _ensure_dir(out_dir)
     prefix = csv_path.stem
@@ -135,8 +140,8 @@ def _run_pipeline(
 def _read_bytes(path: Path) -> bytes | None:
     """ファイルをバイト列で読み込む。読めない場合は None を返す。
 
-    出力ファイルが存在しない・権限エラーなどの場合でも
-    例外を呼び出し元に伝播させず、None で安全に処理を継続させるための wrapper。
+    ファイルが存在しない・権限エラーなどが起きても例外を外に出さず、
+    None を返すことで呼び出し元の処理を止めない。
     """
     try:
         return path.read_bytes()
@@ -169,8 +174,8 @@ if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
     out_dir = Path(out_dir_str)
     result: dict[str, Any] | None = None
 
-    # rules.json の存在確認をパイプライン実行前に行う
-    # 早期リターンで後続のエラーを防ぎ、ユーザーへの明示的なフィードバックを優先する
+    # rules.json が見つからない場合はここで止める（早期リターン）
+    # 後続でエラーが起きると原因が分かりにくくなるので、先に確認してユーザーに伝える
     if not rules_path.exists():
         run_error = f"rules.json not found: {rules_path}"
     else:
@@ -179,9 +184,8 @@ if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
                 if uploaded_csv is None:
                     run_error = "Please upload a CSV file before running."
                 else:
-                    # アップロードファイルは一時ディレクトリに保存してパイプラインに渡す。
-                    # TemporaryDirectory を使うことで、処理後に自動でディスクから削除される。
-                    # Streamlit Cloud / Render のような制約ある環境でも安全に動作する。
+                    # 一時フォルダに保存してパイプラインに渡す。
+                    # with ブロックを抜けると自動でフォルダが削除される（ゴミが残らない）。
                     with tempfile.TemporaryDirectory() as tmp:
                         csv_path = _save_upload(uploaded_csv, Path(tmp))
                         result = _run_pipeline(
@@ -193,8 +197,8 @@ if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
                             do_html=do_html,
                         )
                         if result is not None:
-                            # 一時ディレクトリは with ブロック終了後に削除されるため、
-                            # ダウンロード用にバイト列を事前にメモリへ保持しておく
+                            # 一時フォルダは with 終了後に消えるので、
+                            # ダウンロード用にバイト列をメモリへ保持しておく
                             result["source_bytes"] = uploaded_csv.getvalue()
             else:
                 sample_csv_path = SAMPLE_BAD_CSV_PATH if run_sample_bad_btn else SAMPLE_GOOD_CSV_PATH
@@ -213,11 +217,11 @@ if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
                         result["source_path"] = str(sample_csv_path.resolve())
                         result["source_bytes"] = _read_bytes(sample_csv_path)
         except Exception as exc:
-            # パイプライン内の予期しないエラーをキャッチしてユーザーに表示する。
+            # 予期しないエラーをキャッチして画面に表示する。
             # スタックトレースをそのまま出すと UX が悪いため、メッセージのみ表示する。
             run_error = f"Run failed: {exc}"
 
-    # 成功した場合は session_state に結果を保存して画面に反映する
+    # 成功したら session_state に保存して画面を更新する
     if result is not None:
         st.session_state[LAST_RUN_KEY] = result
         st.success(f"Run completed: {result['source_name']}")
@@ -225,7 +229,7 @@ if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
 if run_error:
     st.error(run_error)
 
-# セッションに前回の実行結果がなければ案内を表示して処理を終了する
+# 前回の実行結果がなければ案内を表示して終了する（以降の表示処理をスキップ）
 last_run = st.session_state.get(LAST_RUN_KEY)
 if last_run is None:
     st.info("Upload a CSV and run, or click 'Run sample_bad.csv' / 'Run sample_good.csv'.")
@@ -269,7 +273,7 @@ st.subheader("Generated files")
 for path in output_paths.values():
     st.write(f"- `{path}`")
 
-# 各出力ファイルをバイト列として読み込み、ダウンロードボタンを生成する。
+# 各出力ファイルのダウンロードボタンを生成する。
 # ファイルが存在しない（例: Excel 未選択）場合はそのキーをスキップする。
 st.subheader("Download outputs")
 download_specs = [

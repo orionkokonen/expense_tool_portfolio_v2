@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-html_report.py
-HTMLレポートを生成する
-- errors / warnings を表にする
-- month / category のグラフ（Chart.js CDN）を表示
+html_report.py — HTML レポートの生成
+errors / warnings / clean をテーブルで表示し、
+月別・カテゴリ別のグラフを Chart.js（CDN）で描画する。
 """
 
 from __future__ import annotations
@@ -22,17 +21,18 @@ def write_html_report(
     summary: list[dict],
     title: str = "Expense Tool Report",
 ) -> None:
-    """HTML形式のレポートファイルを生成して保存する。
+    """HTML 形式のレポートファイルを生成して保存する。
 
-    グラフは Chart.js（CDN）を使い、サーバーサイドでの画像生成を不要にしている。
-    これにより、Matplotlib などの依存を増やさずに視覚的なレポートを実現できる。
+    グラフは Chart.js（CDN）を使うことで、Matplotlib などのライブラリなしに
+    ブラウザ上でグラフを表示できる。
 
-    Python 側で集計データを json.dumps() して JavaScript 変数に埋め込む設計にすることで、
-    サーバーとクライアントの間でデータを再送する必要がなく、単一のHTMLファイルとして完結する。
+    集計データを json.dumps() で JavaScript 変数に埋め込む設計なので、
+    1 つの HTML ファイルだけで完結する（サーバーへの追加リクエスト不要）。
 
-    XSS 対策として、ユーザーデータをHTMLに埋め込む箇所では必ず escape() を使用する。
+    セキュリティ: CSV の内容をそのまま HTML に出力すると "<script>" などが
+    実行されてしまう（XSS）ので、escape() で必ず無害化してから埋め込む。
     """
-    # summary リストから月別・カテゴリ別のデータを取り出してグラフ用に整形する
+    # summary のフラットリストから月別・カテゴリ別のデータを取り出す
     month_rows = [
         (r["key"], int(r["value"]))
         for r in summary
@@ -49,8 +49,8 @@ def write_html_report(
     cat_labels = [c for c, _ in cat_rows]
     cat_values = [v for _, v in cat_rows]
 
-    # データ量が多いとHTMLが重くなるため先頭200件に制限する
-    # 完全なデータは CSV ダウンロードから参照できる設計になっている
+    # HTML が重くなりすぎないよう先頭 200 件に制限する。
+    # 全データは CSV ダウンロードから参照できる。
     errors_head = errors[:200]
     warnings_head = warnings[:200]
     clean_head = clean[:200]
@@ -109,7 +109,7 @@ def write_html_report(
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    // Python側で json.dumps() したデータをそのままJavaScript変数として埋め込む。
+    // Python 側で json.dumps() したデータを JavaScript 変数として埋め込む。
     // サーバーへの追加リクエストなしにグラフを描画できる。
     const monthLabels = {json.dumps(month_labels)};
     const monthValues = {json.dumps(month_values)};
@@ -151,11 +151,10 @@ def write_html_report(
 
 
 def table_html(rows: list[dict], columns: list[str]) -> str:
-    """辞書のリストをHTML表に変換する。
+    """辞書のリストを HTML テーブルに変換する。
 
-    セル値には必ず escape() を適用する。
-    CSVの内容に "<script>" のような文字列が含まれていた場合に
-    HTML として解釈されてしまう XSS を防ぐため。
+    セル値に escape() を適用することで XSS（クロスサイトスクリプティング）を防ぐ。
+    CSV の内容に "<script>" のような文字列が含まれていても HTML として実行されない。
     """
     if not rows:
         return "<p class='muted'>（なし）</p>"

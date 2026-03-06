@@ -1,10 +1,12 @@
 services:
-  - type: web
+  - type: web                   # Web サービスとしてデプロイする
     name: expense-tool-streamlit
-    runtime: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
+    runtime: python             # Python ランタイムを使う
+    plan: free                  # 無料プランで動かす
+    buildCommand: pip install -r requirements.txt          # デプロイ時にライブラリをインストール
+    # $PORT は Render が自動で割り当てるポート番号（固定値は使えないため環境変数で受け取る）
+    # --server.address 0.0.0.0 にすることで外部からアクセスできるようになる
     startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0
     envVars:
       - key: PYTHONUNBUFFERED
-        value: "1"
+        value: "1"              # ログをバッファリングせず即時出力する（デバッグしやすくなる）

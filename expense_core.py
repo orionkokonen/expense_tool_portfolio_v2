@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-expense_core.py
-CSV読み込み / 基本チェック(errors) / 集計 / CSV出力
-（ルールチェックは rules.py 側でやる）
+expense_core.py — データ処理の中心部
+CSV 読み込み / 基本入力チェック / 型変換 / 集計 / CSV 書き出しを担う。
+社内ルールのチェックは rules.py 側が行う。
 """
 
 from __future__ import annotations
@@ -16,7 +16,10 @@ from typing import TypedDict
 REQUIRED_COLUMNS = ["date", "amount", "merchant", "category"]
 
 
+# --- 型定義（TypedDict = 辞書のキーと型を明示するための仕組み）---
+
 class ExpenseRow(TypedDict):
+    """入力チェック後の行（amount はまだ文字列）。"""
     row: str
     date: str
     amount: str
@@ -25,6 +28,7 @@ class ExpenseRow(TypedDict):
 
 
 class ExpenseRowNorm(TypedDict):
+    """型変換後の行（amount が整数になっている）。"""
     row: str
     date: str
     amount: int
@@ -33,6 +37,7 @@ class ExpenseRowNorm(TypedDict):
 
 
 class IssueRow(TypedDict):
+    """エラー行（reason に問題の説明を付ける）。"""
     row: str
     date: str
     amount: str
@@ -42,24 +47,23 @@ class IssueRow(TypedDict):
 
 
 def read_csv(path: str) -> list[dict[str, str]]:
-    """CSVを読み込んで辞書のリストとして返す。
+    """CSV を読み込んで「列名 → 値」の辞書リストとして返す。
 
-    DictReader を使うことで列名をキーとした辞書形式になり、
-    後工程でのフィールドアクセスが安全になる。
-    encoding="utf-8" を明示するのは、環境依存の文字化けを防ぐため。
+    encoding="utf-8" を明示するのは、環境によって文字化けするのを防ぐため。
+    空のファイルや列名がない場合は ValueError を出して呼び出し元に知らせる。
     """
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         if reader.fieldnames is None:
             raise ValueError("CSVの列名が読めませんでした")
-        return list(reader)  # DictReader は値を str で返す（空欄なら ""）
+        return list(reader)  # 値はすべて str（空欄なら ""）
 
 
 def parse_date(s: str) -> bool:
-    """日付文字列が YYYY-MM-DD 形式かどうかを検証する。
+    """日付文字列が YYYY-MM-DD 形式かどうかを確認する。
 
-    strptime で厳密にパースすることで "2024-13-01" や "20240101" のような
-    見た目は近いが不正な値を確実に弾く。
+    strptime で厳密にパースするので "2024-13-01"（月が13）や
+    "20240101"（区切りなし）のような不正な値も確実に弾ける。
     """
     try:
         datetime.strptime(s, "%Y-%m-%d")
@@ -69,10 +73,9 @@ def parse_date(s: str) -> bool:
 
 
 def parse_amount(s: str) -> bool:
-    """金額文字列が整数として解釈できるかを検証する。
+    """金額文字列が整数として解釈できるかを確認する。
 
-    float を許容すると "1.5" などが通ってしまい後工程の集計がずれるため、
-    int に限定している。
+    "1.5" のような小数を許容すると集計がずれるため、整数のみ OK にしている。
     """
     try:
         int(s)
@@ -82,33 +85,31 @@ def parse_amount(s: str) -> bool:
 
 
 def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[IssueRow]]:
-    """
-    全行に対して基本バリデーションを行い、OK行とエラー行に振り分ける。
+    """全行に対して基本入力チェックを行い、OK 行とエラー行に振り分ける。
 
-    バリデーション項目:
+    チェック項目:
       - 必須列の存在・空欄チェック
       - 日付フォーマット（YYYY-MM-DD）
       - 金額が整数か
       - date + amount + merchant の組み合わせによる重複検出
 
-    エラーがあった行は errors に、問題なければ ok_rows に追加する。
-    「エラーがある行は後工程から除外する」設計にすることで、
-    ルールチェックや集計が常に正常データだけを扱える。
+    エラーがあった行は後工程から除外することで、
+    ルールチェックや集計が常に正常データだけを扱えるようになる。
 
-    returns:
-      ok_rows: 基本チェックに通った行（row番号つき）
-      errors:  問題ある行（理由付き）
+    戻り値:
+      ok_rows — チェックを通った行（行番号つき）
+      errors  — 問題のある行（理由つき）
     """
     errors: list[IssueRow] = []
     ok_rows: list[ExpenseRow] = []
 
-    # set を使って O(1) で重複を検出する。行数が多くても処理が遅くならない。
+    # set（集合）で重複を管理する。辞書と違い「存在するかどうか」だけを O(1) で確認できる。
     seen: set[tuple[str, str, str]] = set()  # (date, amount, merchant_lower)
 
-    for idx, r in enumerate(rows, start=2):  # CSVは1行目がヘッダなので2行目から
+    for idx, r in enumerate(rows, start=2):  # CSV の 1 行目はヘッダなので 2 行目から数える
         reasons: list[str] = []
 
-        # 必須列チェック（空欄/空白だけもNG）
+        # 必須列チェック（空欄・空白だけもNG）
         for col in REQUIRED_COLUMNS:
             if col not in r:
                 reasons.append(f"列がない: {col}")
@@ -117,7 +118,7 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
             if text.strip() == "":
                 reasons.append(f"空欄: {col}")
 
-        # 日付チェック（空欄は上で捕まるので、ここは「空欄じゃないのに形式違い」）
+        # 日付チェック（空欄は上で検出済み。ここは「空欄ではないが形式が違う」ケース）
         d = (r.get("date") or "").strip()
         if d and not parse_date(d):
             reasons.append("日付の形式が違う（YYYY-MM-DD）")
@@ -127,7 +128,7 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
         if a and not parse_amount(a):
             reasons.append("金額が数字じゃない")
 
-        # 重複チェック: merchant を小文字に正規化することで大文字・小文字の表記揺れを吸収する
+        # 重複チェック: merchant を小文字に統一して大文字・小文字の表記揺れを吸収する
         date_k = (r.get("date") or "").strip()
         amount_k = (r.get("amount") or "").strip()
         merchant_k = (r.get("merchant") or "").strip().lower()
@@ -165,11 +166,10 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
 
 
 def normalize_ok_rows(ok_rows: list[ExpenseRow]) -> list[ExpenseRowNorm]:
-    """バリデーション済み行の型を確定させる（str → int など）。
+    """入力チェック済み行の型を確定させる（文字列 → 整数など）。
 
-    check_rows の段階では全フィールドを str のまま保持する。
-    型変換は「正常と確定した後」に行うことで、変換エラーが起きにくい設計にしている。
-    責務を「検証」と「型変換」で分離することで、テストもしやすくなる。
+    check_rows では全フィールドを文字列のまま保持している。
+    「正常と確定した後」に型変換することで、変換エラーが起きにくい設計になっている。
     """
     out: list[ExpenseRowNorm] = []
     for r in ok_rows:
@@ -191,8 +191,8 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
     集計軸: 月別合計 / カテゴリ別合計 / 上位N加盟店 / 曜日別合計 / 基本統計
 
     戻り値を {"type", "key", "value"} のフラット構造にしているのは、
-    CSV や Excel への出力時に形式を統一しやすくするため。
-    defaultdict(int) を使うことで、初出のキーに 0 を自動セットできる。
+    CSV や Excel への書き出し形式を統一しやすくするため。
+    defaultdict(int) は「まだないキーを参照したとき 0 を返す辞書」。
     """
     by_month = defaultdict(int)
     by_category = defaultdict(int)
@@ -227,7 +227,7 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
     for c in sorted(by_category.keys()):
         summary.append({"type": "category_total", "key": c, "value": str(by_category[c])})
 
-    # 上位N件に絞ることで、加盟店数が多くてもレポートが肥大化しない
+    # 上位 N 件に絞ることで、加盟店数が多くてもレポートが肥大化しない
     summary.append({"type": "merchant_top", "key": f"top_{top_n}", "value": "total_amount"})
     merchants_sorted = sorted(by_merchant.items(), key=lambda x: x[1], reverse=True)[:top_n]
     for name, total in merchants_sorted:
@@ -253,9 +253,9 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
 def write_csv(path: str, rows: list[dict], fieldnames: list[str]) -> None:
     """辞書のリストを CSV に書き出す。
 
-    extrasaction="ignore" を指定することで、辞書に余分なキーがあっても
-    エラーにならず、fieldnames に指定した列だけを出力できる。
-    newline="" を明示するのは、Windows 環境での改行コード二重挿入を防ぐため。
+    extrasaction="ignore" により、辞書に余分なキーがあっても無視して
+    fieldnames で指定した列だけを出力できる。
+    newline="" を明示するのは、Windows 環境で改行コードが二重に挿入されるのを防ぐため。
     """
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
