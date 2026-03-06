@@ -1,5 +1,11 @@
 # CHANGELOG
 
+このファイルは、ブラッシュアップや機能追加の履歴を時系列で記録します。
+
+## Unreleased
+
+- Added `ROADMAP.md` for tracking upcoming implementation plans.
+
 ## v0.3
 
 - Streamlit GUI: added `Run sample_bad.csv` button for one-click sample execution.
