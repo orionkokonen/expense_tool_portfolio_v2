@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-excel_export.py
-Excel（.xlsx）を生成する
-シート: Errors / Warnings / Summary / Clean / Charts
-見栄え: フィルタ / 列幅調整 / ヘッダ太字 / フリーズ
-グラフ: 月別推移(棒) / カテゴリ比率(円)
+excel_export.py — Excel レポートの生成
+シート: Errors / Warnings / Clean / Summary / Charts
+見栄え: ヘッダ太字 / 先頭行固定 / オートフィルタ / 列幅自動調整
+グラフ: 月別推移（棒グラフ）/ カテゴリ比率（円グラフ）
 """
 
 from __future__ import annotations
@@ -26,23 +25,23 @@ def write_xlsx_report(
     clean: list[dict],
     summary: list[dict],
 ) -> None:
-    """Excelレポートを生成して指定パスに保存する。
+    """Excel レポートを生成して指定パスに保存する。
 
     シート構成:
-      - Errors   : バリデーションエラー行
-      - Warnings : ビジネスルール違反行
+      - Errors   : 入力チェックでエラーになった行
+      - Warnings : 社内ルール違反の行
       - Clean    : 問題なしのクリーン行
       - Summary  : 集計結果
       - Charts   : グラフ（月別・カテゴリ別）
 
-    出力先ディレクトリが存在しない場合は自動生成する。
-    Render のような環境ではデプロイ時にディレクトリが存在しない場合があるため、
+    出力先フォルダが存在しない場合は自動で作成する。
+    Render のようなクラウド環境ではデプロイ時にフォルダがない場合があるため、
     mkdir を明示的に呼んでいる。
     """
     wb = Workbook()
 
-    # Workbook 作成時に自動生成されるデフォルトシートは不要なので削除する
-    # これをやらないと意図しない空シートが先頭に残ってしまう
+    # Workbook 作成時に自動生成される空のシートを削除する。
+    # 削除しないと意図しない空シートが先頭に残ってしまう。
     default = wb.active
     wb.remove(default)
 
@@ -68,13 +67,12 @@ def write_xlsx_report(
 def _add_table_sheet(wb: Workbook, title: str, rows: list[dict], columns: list[str]) -> None:
     """データをテーブル形式でシートに書き込む。
 
-    ヘッダを太字にし、先頭行をフリーズ、オートフィルタを設定することで
-    Excelで開いたときに操作しやすいレイアウトにしている。
-    列幅は内容に応じて自動調整する（_auto_width）。
+    ヘッダを太字・先頭行固定・オートフィルタを設定して操作しやすくし、
+    列幅は内容に合わせて自動調整する（_auto_width）。
     """
     ws = wb.create_sheet(title)
 
-    # header
+    # ヘッダ行を書き込み、太字・中央揃えにする
     ws.append(columns)
     header_font = Font(bold=True)
     for col_idx in range(1, len(columns) + 1):
@@ -82,7 +80,7 @@ def _add_table_sheet(wb: Workbook, title: str, rows: list[dict], columns: list[s
         c.font = header_font
         c.alignment = Alignment(vertical="center")
 
-    # rows
+    # データ行を書き込む
     for r in rows:
         ws.append([r.get(c, "") for c in columns])
 
@@ -96,13 +94,11 @@ def _add_table_sheet(wb: Workbook, title: str, rows: list[dict], columns: list[s
 def _auto_width(ws, max_width: int = 60) -> None:
     """各列の最大文字数に応じて列幅を自動調整する。
 
-    openpyxl はデフォルトで列幅を自動調整しないため、
-    手動でセル内容の最大文字数を計算して適用する。
-    max_width で上限を設けることで、長い文字列による列の過剰な広がりを防ぐ。
+    openpyxl はデフォルトで列幅を調整しないため、手動で計算して設定する。
+    max_width で上限を設けることで、長い文字列で列が広がりすぎるのを防ぐ。
     """
     for col_idx in range(1, ws.max_column + 1):
         letter = get_column_letter(col_idx)
-        # 各列の最大文字数（ざっくり）
         max_len = 0
         for row in range(1, ws.max_row + 1):
             v = ws.cell(row=row, column=col_idx).value
@@ -115,16 +111,11 @@ def _auto_width(ws, max_width: int = 60) -> None:
 
 
 def _build_charts(ws, summary: list[dict]) -> None:
-    """
-    Chartsシートに
-    - 月別合計テーブル + 棒グラフ
-    - カテゴリ合計テーブル + 円グラフ
-    を作る
+    """Charts シートに月別棒グラフとカテゴリ別円グラフを作る。
 
-    summary リストからグラフ用データ（月別・カテゴリ別）を抽出してテーブルを組み立て、
-    openpyxl の Reference でグラフのデータ範囲を指定する。
-    テーブルをシートに書き込んでからそれを参照する構造にすることで、
-    グラフデータが Excel 上でも確認・編集しやすい状態になる。
+    summary のフラットリストから type でフィルタしてグラフ用データを抽出し、
+    シートにテーブルとして書き込んでから openpyxl の Reference でグラフを作成する。
+    テーブルをシートに残すことで Excel 上でもデータを確認・編集しやすくなる。
     """
     ws["A1"] = "Month totals"
     ws["A1"].font = Font(bold=True)
@@ -141,16 +132,16 @@ def _build_charts(ws, summary: list[dict]) -> None:
         if r.get("type") == "category_total" and r.get("key") not in ("category",)
     ]
 
-    # 月別表（A3:B...）
-    ws.append([])  # A2 empty
-    ws.append(["month", "total_amount"])  # row3
+    # 月別テーブルをシートに書き込む（A3 から）
+    ws.append([])  # A2 を空行にする
+    ws.append(["month", "total_amount"])  # row3: ヘッダ
     for m, v in month_rows:
         ws.append([m, v])
 
     month_start = 3
     month_end = 3 + len(month_rows)
 
-    # 棒グラフ（右側）
+    # 棒グラフ: データ範囲と軸ラベルを Reference で指定する
     if month_rows:
         chart = BarChart()
         chart.title = "Monthly total"
@@ -164,12 +155,12 @@ def _build_charts(ws, summary: list[dict]) -> None:
         chart.dataLabels.showVal = False
         ws.add_chart(chart, "D3")
 
-    # カテゴリ表（月別表の直下に配置）
+    # カテゴリテーブルを月別テーブルの直下に配置する
     row0 = month_end + 3
     ws[f"A{row0}"] = "Category totals"
     ws[f"A{row0}"].font = Font(bold=True)
 
-    ws.append([])  # blank
+    ws.append([])  # 空行
     ws.append(["category", "total_amount"])
     for c, v in cat_rows:
         ws.append([c, v])
@@ -178,6 +169,7 @@ def _build_charts(ws, summary: list[dict]) -> None:
     cat_start = cat_header_row
     cat_end = cat_header_row + len(cat_rows)
 
+    # 円グラフ: カテゴリ比率を可視化する
     if cat_rows:
         pie = PieChart()
         pie.title = "Category ratio"
