@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-
 # --- データクラス（設定値をまとめて管理する構造体）---
 # frozen=True にすることで処理中に値が書き換えられないよう「読み取り専用」にしている
 

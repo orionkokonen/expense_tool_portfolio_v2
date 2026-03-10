@@ -11,8 +11,8 @@ from typing import Any
 
 import streamlit as st
 
-from expense_core import check_rows, make_summary, normalize_ok_rows, read_csv, write_csv
 from excel_export import write_xlsx_report
+from expense_core import check_rows, make_summary, normalize_ok_rows, read_csv, write_csv
 from html_report import write_html_report
 from rules import apply_rules, load_rules
 
@@ -579,7 +579,9 @@ def _build_insights(
 
     if category_pairs:
         category, amount = max(category_pairs, key=lambda item: item[1])
-        lines.append(f"支出最大カテゴリは {category} で、合計 {_format_number(amount, '円')} です。")
+        lines.append(
+            f"支出最大カテゴリは {category} で、合計 {_format_number(amount, '円')} です。"
+        )
 
     if merchant_pairs:
         merchant, amount = merchant_pairs[0]
@@ -674,7 +676,11 @@ def _render_overview(last_run: dict[str, Any]) -> None:
     top_left, top_right = st.columns(2)
     with top_left:
         _render_bar_card("月別支出", month_pairs, empty_message="月別集計がありません。")
-        _render_bar_card("カテゴリ別支出", category_pairs, empty_message="カテゴリ集計がありません。")
+        _render_bar_card(
+            "カテゴリ別支出",
+            category_pairs,
+            empty_message="カテゴリ集計がありません。",
+        )
     with top_right:
         _render_bar_card(
             f"支出先 Top {last_run['top_n']}",

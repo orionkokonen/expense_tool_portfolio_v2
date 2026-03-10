@@ -25,7 +25,12 @@ def test_check_rows_and_summary():
     """check_rows() が OK 行とエラー行に正しく振り分け、集計できるか確認する。"""
     rows = [
         {"date": "2026-01-10", "amount": "1200", "merchant": "A", "category": "消耗品"},
-        {"date": "2026/01/10", "amount": "500", "merchant": "B", "category": "消耗品"},  # 日付が不正
+        {
+            "date": "2026/01/10",
+            "amount": "500",
+            "merchant": "B",
+            "category": "消耗品",
+        },  # 日付が不正
     ]
     ok, errors = check_rows(rows)
     assert len(ok) == 1      # 正常行は 1 件
