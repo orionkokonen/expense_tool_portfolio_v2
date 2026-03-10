@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
+import tempfile
 from collections import Counter
 from html import escape
 from pathlib import Path
-import tempfile
 from typing import Any
 
 import streamlit as st
