@@ -19,3 +19,6 @@ out/
 Thumbs.db
 .vscode/
 .idea/
+
+# CI 依存パッケージ（いらない）
+.ci_deps/
