@@ -5,6 +5,9 @@
 ## Unreleased
 
 - Added `ROADMAP.md` for tracking upcoming implementation plans.
+- Fixed CI failures caused by `mypy` type mismatches across the expense processing pipeline.
+- Added explicit typed row models for warnings and summary data, and aligned `rules.py`, `app.py`, and report exporters with the normalized data flow.
+- Tightened Streamlit typing around uploads, counters, output paths, and `defaultdict` usage so `ruff`, `mypy`, and `pytest` all pass locally again.
 
 ## v0.3
 
