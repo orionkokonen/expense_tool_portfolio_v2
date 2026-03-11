@@ -22,3 +22,4 @@ Thumbs.db
 
 # CI 依存パッケージ（いらない）
 .ci_deps/
+.tmp_mypy/
