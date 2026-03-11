@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from expense_core import ExpenseRowNorm, WarningRow
+
 # --- データクラス（設定値をまとめて管理する構造体）---
 # frozen=True にすることで処理中に値が書き換えられないよう「読み取り専用」にしている
 
@@ -94,7 +96,9 @@ def _valid_date(s: str) -> bool:
         return False
 
 
-def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[str, str]]]:
+def apply_rules(
+    rows: list[ExpenseRowNorm], rules: Rules
+) -> tuple[list[ExpenseRowNorm], list[WarningRow]]:
     """正規化済み行に対して社内ルールを適用し、警告を生成する。
 
     処理は2段階:
@@ -107,8 +111,8 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
       clean_rows — fallback モード時はカテゴリを書き換えたデータ
       warnings   — 違反内容の一覧
     """
-    warnings: list[dict[str, str]] = []
-    clean_rows: list[dict] = []
+    warnings: list[WarningRow] = []
+    clean_rows: list[ExpenseRowNorm] = []
 
     allowed_set = set(rules.allowed_categories or [])
     banned_words = rules.banned_words or []
@@ -230,8 +234,13 @@ def apply_rules(rows: list[dict], rules: Rules) -> tuple[list[dict], list[dict[s
             )
 
         # fallback 後のカテゴリでクリーン行を生成する
-        r2 = dict(r)
-        r2["category"] = category_for_clean
+        r2: ExpenseRowNorm = {
+            "row": row_id,
+            "date": date_str,
+            "amount": amount,
+            "merchant": merchant,
+            "category": category_for_clean,
+        }
         clean_rows.append(r2)
 
         # 上限チェック用の累積合計を更新する（行ごとに加算）

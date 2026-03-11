@@ -10,9 +10,19 @@ from pathlib import Path
 from typing import Any
 
 import streamlit as st
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from excel_export import write_xlsx_report
-from expense_core import check_rows, make_summary, normalize_ok_rows, read_csv, write_csv
+from expense_core import (
+    IssueRow,
+    SummaryRow,
+    WarningRow,
+    check_rows,
+    make_summary,
+    normalize_ok_rows,
+    read_csv,
+    write_csv,
+)
 from html_report import write_html_report
 from rules import apply_rules, load_rules
 
@@ -243,8 +253,8 @@ def _ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _save_upload(uploaded_file, dir_path: Path) -> Path:
-    path = dir_path / uploaded_file.name
+def _save_upload(uploaded_file: UploadedFile, dir_path: Path) -> Path:
+    path = dir_path / str(uploaded_file.name)
     path.write_bytes(uploaded_file.getbuffer())
     return path
 
@@ -273,30 +283,30 @@ def _format_number(value: int | None, suffix: str = "") -> str:
     return f"{value:,}{suffix}"
 
 
-def _summary_pairs(summary: list[dict[str, str]], summary_type: str) -> list[tuple[str, int]]:
+def _summary_pairs(summary: list[SummaryRow], summary_type: str) -> list[tuple[str, int]]:
     pairs: list[tuple[str, int]] = []
     for row in summary:
-        if row.get("type") != summary_type:
+        if row["type"] != summary_type:
             continue
-        amount = _to_int(row.get("value"))
+        amount = _to_int(row["value"])
         if amount is None:
             continue
-        key = str(row.get("key") or "")
+        key = row["key"]
         if not key:
             continue
         pairs.append((key, amount))
     return pairs
 
 
-def _summary_stats(summary: list[dict[str, str]]) -> dict[str, int]:
+def _summary_stats(summary: list[SummaryRow]) -> dict[str, int]:
     stats: dict[str, int] = {}
     for row in summary:
-        if row.get("type") != "stats":
+        if row["type"] != "stats":
             continue
-        amount = _to_int(row.get("value"))
+        amount = _to_int(row["value"])
         if amount is None:
             continue
-        key = str(row.get("key") or "")
+        key = row["key"]
         if key:
             stats[key] = amount
     return stats
@@ -315,19 +325,19 @@ def _pairs_to_display_rows(
     ]
 
 
-def _count_warning_kinds(warnings: list[dict[str, str]]) -> list[tuple[str, int]]:
-    counts = Counter()
+def _count_warning_kinds(warnings: list[WarningRow]) -> list[tuple[str, int]]:
+    counts: Counter[str] = Counter()
     for warning in warnings:
-        kind = (warning.get("kind") or "").strip()
+        kind = warning["kind"].strip()
         if kind:
             counts[kind] += 1
     return counts.most_common()
 
 
-def _count_error_reasons(errors: list[dict[str, str]]) -> list[tuple[str, int]]:
-    counts = Counter()
+def _count_error_reasons(errors: list[IssueRow]) -> list[tuple[str, int]]:
+    counts: Counter[str] = Counter()
     for error in errors:
-        text = (error.get("reason") or "").strip()
+        text = error["reason"].strip()
         if not text:
             continue
         for reason in text.split(" / "):
@@ -563,8 +573,8 @@ def _render_empty_state() -> None:
 
 def _build_insights(
     *,
-    errors: list[dict[str, str]],
-    warnings: list[dict[str, str]],
+    errors: list[IssueRow],
+    warnings: list[WarningRow],
     category_pairs: list[tuple[str, int]],
     merchant_pairs: list[tuple[str, int]],
 ) -> list[str]:
@@ -826,17 +836,17 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
         ]
 
         for key, label, mime in download_specs:
-            path = output_paths.get(key)
-            if path is None:
+            output_path = output_paths.get(key)
+            if output_path is None:
                 continue
-            payload = _read_bytes(path)
+            payload = _read_bytes(output_path)
             if payload is None:
-                st.warning(f"Could not read output file: {path}")
+                st.warning(f"Could not read output file: {output_path}")
                 continue
             st.download_button(
                 label=f"Download {label}",
                 data=payload,
-                file_name=path.name,
+                file_name=output_path.name,
                 mime=mime,
                 use_container_width=True,
                 key=f"download_{key}",

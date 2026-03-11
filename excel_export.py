@@ -8,6 +8,7 @@ excel_export.py — Excel レポートの生成
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -16,14 +17,16 @@ from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
+from expense_core import SummaryRow
+
 
 def write_xlsx_report(
     *,
     path: Path,
-    errors: list[dict],
-    warnings: list[dict],
-    clean: list[dict],
-    summary: list[dict],
+    errors: Sequence[Mapping[str, object]],
+    warnings: Sequence[Mapping[str, object]],
+    clean: Sequence[Mapping[str, object]],
+    summary: Sequence[SummaryRow],
 ) -> None:
     """Excel レポートを生成して指定パスに保存する。
 
@@ -64,7 +67,9 @@ def write_xlsx_report(
     wb.save(path)
 
 
-def _add_table_sheet(wb: Workbook, title: str, rows: list[dict], columns: list[str]) -> None:
+def _add_table_sheet(
+    wb: Workbook, title: str, rows: Sequence[Mapping[str, object]], columns: Sequence[str]
+) -> None:
     """データをテーブル形式でシートに書き込む。
 
     ヘッダを太字・先頭行固定・オートフィルタを設定して操作しやすくし、
@@ -110,7 +115,7 @@ def _auto_width(ws, max_width: int = 60) -> None:
         ws.column_dimensions[letter].width = min(max_len + 2, max_width)
 
 
-def _build_charts(ws, summary: list[dict]) -> None:
+def _build_charts(ws, summary: Sequence[SummaryRow]) -> None:
     """Charts シートに月別棒グラフとカテゴリ別円グラフを作る。
 
     summary のフラットリストから type でフィルタしてグラフ用データを抽出し、
@@ -124,12 +129,12 @@ def _build_charts(ws, summary: list[dict]) -> None:
     month_rows = [
         (r["key"], int(r["value"]))
         for r in summary
-        if r.get("type") == "month_total" and r.get("key") not in ("month",)
+        if r["type"] == "month_total" and r["key"] != "month"
     ]
     cat_rows = [
         (r["key"], int(r["value"]))
         for r in summary
-        if r.get("type") == "category_total" and r.get("key") not in ("category",)
+        if r["type"] == "category_total" and r["key"] != "category"
     ]
 
     # 月別テーブルをシートに書き込む（A3 から）

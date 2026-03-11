@@ -8,17 +8,20 @@ errors / warnings / clean をテーブルで表示し、
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from html import escape
 from pathlib import Path
+
+from expense_core import SummaryRow
 
 
 def write_html_report(
     *,
     path: Path,
-    errors: list[dict],
-    warnings: list[dict],
-    clean: list[dict],
-    summary: list[dict],
+    errors: Sequence[Mapping[str, object]],
+    warnings: Sequence[Mapping[str, object]],
+    clean: Sequence[Mapping[str, object]],
+    summary: Sequence[SummaryRow],
     title: str = "Expense Tool Report",
 ) -> None:
     """HTML 形式のレポートファイルを生成して保存する。
@@ -36,12 +39,12 @@ def write_html_report(
     month_rows = [
         (r["key"], int(r["value"]))
         for r in summary
-        if r.get("type") == "month_total" and r.get("key") not in ("month",)
+        if r["type"] == "month_total" and r["key"] != "month"
     ]
     cat_rows = [
         (r["key"], int(r["value"]))
         for r in summary
-        if r.get("type") == "category_total" and r.get("key") not in ("category",)
+        if r["type"] == "category_total" and r["key"] != "category"
     ]
 
     month_labels = [m for m, _ in month_rows]
@@ -150,7 +153,7 @@ def write_html_report(
     path.write_text(html, encoding="utf-8")
 
 
-def table_html(rows: list[dict], columns: list[str]) -> str:
+def table_html(rows: Sequence[Mapping[str, object]], columns: Sequence[str]) -> str:
     """辞書のリストを HTML テーブルに変換する。
 
     セル値に escape() を適用することで XSS（クロスサイトスクリプティング）を防ぐ。

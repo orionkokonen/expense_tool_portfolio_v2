@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 from collections import defaultdict
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from statistics import mean, median
 from typing import TypedDict
@@ -44,6 +45,23 @@ class IssueRow(TypedDict):
     merchant: str
     category: str
     reason: str
+
+
+class WarningRow(TypedDict):
+    kind: str
+    row: str
+    date: str
+    month: str
+    category: str
+    merchant: str
+    amount: str
+    message: str
+
+
+class SummaryRow(TypedDict):
+    type: str
+    key: str
+    value: str
 
 
 def read_csv(path: str) -> list[dict[str, str]]:
@@ -185,7 +203,7 @@ def normalize_ok_rows(ok_rows: list[ExpenseRow]) -> list[ExpenseRowNorm]:
     return out
 
 
-def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[str, str]]:
+def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[SummaryRow]:
     """正常行をもとに複数軸の集計を行い、フラットなリストとして返す。
 
     集計軸: 月別合計 / カテゴリ別合計 / 上位N加盟店 / 曜日別合計 / 基本統計
@@ -194,10 +212,10 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
     CSV や Excel への書き出し形式を統一しやすくするため。
     defaultdict(int) は「まだないキーを参照したとき 0 を返す辞書」。
     """
-    by_month = defaultdict(int)
-    by_category = defaultdict(int)
-    by_merchant = defaultdict(int)
-    by_weekday = defaultdict(int)
+    by_month: defaultdict[str, int] = defaultdict(int)
+    by_category: defaultdict[str, int] = defaultdict(int)
+    by_merchant: defaultdict[str, int] = defaultdict(int)
+    by_weekday: defaultdict[str, int] = defaultdict(int)
 
     amounts: list[int] = []
 
@@ -217,7 +235,7 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
         by_weekday[wd] += amount
         amounts.append(amount)
 
-    summary: list[dict[str, str]] = []
+    summary: list[SummaryRow] = []
 
     summary.append({"type": "month_total", "key": "month", "value": "total_amount"})
     for m in sorted(by_month.keys()):
@@ -250,7 +268,7 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[dict[st
     return summary
 
 
-def write_csv(path: str, rows: list[dict], fieldnames: list[str]) -> None:
+def write_csv(path: str, rows: Sequence[Mapping[str, object]], fieldnames: Sequence[str]) -> None:
     """辞書のリストを CSV に書き出す。
 
     extrasaction="ignore" により、辞書に余分なキーがあっても無視して
