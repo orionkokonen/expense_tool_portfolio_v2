@@ -121,6 +121,22 @@ def _inject_styles() -> None:
             font-size: 1rem;
           }
 
+          /* タブの文字色を常に読めるようにする */
+          button[data-baseweb="tab"] {
+            color: var(--muted) !important;
+            font-weight: 600;
+          }
+
+          button[data-baseweb="tab"][aria-selected="true"] {
+            color: var(--accent) !important;
+            font-weight: 700;
+          }
+
+          /* 元ファイルのパス表示も薄すぎるので補正 */
+          [data-testid="stCaptionContainer"] {
+            color: var(--muted) !important;
+          }
+
           div.block-container {
             max-width: 1240px;
             padding-top: 2.2rem;
