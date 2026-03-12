@@ -1019,7 +1019,11 @@ def main() -> None:
 
         st.divider()
         st.caption("サンプル実行")
-        run_upload_btn = st.button("アップロードした CSV を実行", type="primary", use_container_width=True)
+        run_upload_btn = st.button(
+            "アップロードした CSV を実行",
+            type="primary",
+            use_container_width=True,
+        )
         sample_bad_col, sample_good_col = st.columns(2)
         with sample_bad_col:
             run_sample_bad_btn = st.button("エラーあり", use_container_width=True)
