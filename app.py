@@ -38,7 +38,7 @@ SAMPLE_BAD_CSV_PATH = Path("data/sample_bad.csv")
 SAMPLE_GOOD_CSV_PATH = Path("data/sample_good.csv")
 
 # Streamlit のページ設定は先に一度だけ行う必要がある。
-st.set_page_config(page_title="Expense Tool Portfolio 2.0", layout="wide")
+st.set_page_config(page_title="支出ツール 2.0", layout="wide")
 
 
 
@@ -87,6 +87,36 @@ def _inject_styles() -> None:
 
           [data-testid="stHeader"] {
             background: rgba(252, 250, 245, 0.78);
+          }
+
+          [data-testid="stFileUploaderDropzoneInstructions"] > div:first-child,
+          [data-testid="stFileUploaderDropzoneInstructions"] > span:first-child {
+            font-size: 0;
+          }
+
+          [data-testid="stFileUploaderDropzoneInstructions"] > div:first-child::after,
+          [data-testid="stFileUploaderDropzoneInstructions"] > span:first-child::after {
+            content: "ここにファイルをドラッグ＆ドロップ";
+            font-size: 1rem;
+          }
+
+          [data-testid="stFileUploaderDropzoneInstructions"] small {
+            font-size: 0;
+          }
+
+          [data-testid="stFileUploaderDropzoneInstructions"] small::after {
+            content: "1ファイルあたり上限 200MB・CSV";
+            font-size: 0.95rem;
+          }
+
+          [data-testid="stFileUploaderDropzone"] button {
+            font-size: 0;
+            position: relative;
+          }
+
+          [data-testid="stFileUploaderDropzone"] button::after {
+            content: "ファイルを選択";
+            font-size: 1rem;
           }
 
           div.block-container {
@@ -553,7 +583,7 @@ def _run_pipeline(
             warnings=warnings,
             clean=clean_rows,
             summary=summary,
-            title="Expense Tool Report",
+            title="支出レポート",
         )
         output_paths["report_html"] = html_path
 
@@ -582,14 +612,14 @@ def _render_hero() -> None:
         """
         <div class="hero">
           <div class="eyebrow">Portfolio 2.0</div>
-          <h1>Expense Tool</h1>
+          <h1>支出ツール</h1>
           <p>
             CSV チェックとレポート生成を、読む順番が自然なダッシュボードに再構成しました。
             入力、判定、要点、詳細、ダウンロードを一画面で追える構成です。
           </p>
           <div class="hero-tags">
-            <div class="hero-tag">Validation First</div>
-            <div class="hero-tag">Readable Workflow</div>
+            <div class="hero-tag">検証を優先</div>
+            <div class="hero-tag">読みやすい導線</div>
             <div class="hero-tag">CSV / Excel / HTML</div>
           </div>
         </div>
@@ -614,7 +644,7 @@ def _render_empty_state() -> None:
               UTF-8 を前提にしています。
             </p>
             """,
-            eyebrow="Input",
+            eyebrow="入力",
         )
     with step2:
         _render_html_card(
@@ -625,7 +655,7 @@ def _render_empty_state() -> None:
               明細はタブで必要なときだけ確認できます。
             </p>
             """,
-            eyebrow="Review",
+            eyebrow="確認",
         )
     with step3:
         _render_html_card(
@@ -635,7 +665,7 @@ def _render_empty_state() -> None:
               clean / summary の CSV に加えて、Excel と HTML のレポートを同じ画面から取得できます。
             </p>
             """,
-            eyebrow="Export",
+            eyebrow="出力",
         )
 
     st.markdown("")
@@ -651,7 +681,7 @@ def _render_empty_state() -> None:
               <li>詳細表はタブ分割して視線のノイズを削減</li>
             </ul>
             """,
-            eyebrow="What Changed",
+            eyebrow="変更点",
         )
     with col_right:
         st.code(
@@ -704,15 +734,15 @@ def _render_run_header(last_run: dict[str, Any]) -> None:
     warnings = last_run["warnings"]
 
     if errors:
-        eyebrow = "Needs Fix"
+        eyebrow = "要修正"
         headline = "先に CSV を修正する段階です"
         copy = "形式エラーが残っているため、集計値よりも入力ミスの解消を優先してください。"
     elif warnings:
-        eyebrow = "Review Recommended"
+        eyebrow = "要確認"
         headline = "集計は可能ですが、ルール面の確認が必要です"
         copy = "未知カテゴリや上限超過など、判断が必要な警告を含んでいます。"
     else:
-        eyebrow = "Ready"
+        eyebrow = "準備完了"
         headline = "クリーンに通過しました"
         copy = "検証とルール適用の両方を通過しており、成果物の配布に進めます。"
 
@@ -722,14 +752,14 @@ def _render_run_header(last_run: dict[str, Any]) -> None:
         <div class="hero">
           <div class="eyebrow">{eyebrow}</div>
           <h2>{headline}</h2>
-          <p>{copy}<br />Source: <strong>{source_name}</strong></p>
+          <p>{copy}<br />元ファイル: <strong>{source_name}</strong></p>
         </div>
         """
     )
 
     source_path = last_run.get("source_path")
     if source_path:
-        st.caption(f"Source path: {source_path}")
+        st.caption(f"元ファイルのパス: {source_path}")
 
 
 def _render_overview(last_run: dict[str, Any]) -> None:
@@ -757,11 +787,11 @@ def _render_overview(last_run: dict[str, Any]) -> None:
         pass_rate = last_run["clean_count"] / last_run["input_count"]
 
     metric_cols = st.columns(5)
-    metric_cols[0].metric("Input rows", _format_number(last_run["input_count"]))
-    metric_cols[1].metric("Clean rows", _format_number(last_run["clean_count"]))
-    metric_cols[2].metric("Errors", _format_number(len(errors)))
-    metric_cols[3].metric("Warnings", _format_number(len(warnings)))
-    metric_cols[4].metric("Pass rate", f"{pass_rate:.0%}")
+    metric_cols[0].metric("入力行数", _format_number(last_run["input_count"]))
+    metric_cols[1].metric("クリーン行数", _format_number(last_run["clean_count"]))
+    metric_cols[2].metric("エラー数", _format_number(len(errors)))
+    metric_cols[3].metric("警告数", _format_number(len(warnings)))
+    metric_cols[4].metric("通過率", f"{pass_rate:.0%}")
 
     left, right = st.columns([1.1, 0.9])
     with left:
@@ -777,14 +807,14 @@ def _render_overview(last_run: dict[str, Any]) -> None:
         _render_html_card(
             "判定メモ",
             f'<ul class="bullet-list">{bullets}</ul>',
-            eyebrow="Read This First",
+            eyebrow="先に確認",
         )
     with right:
         snapshot_cols = st.columns(2)
-        snapshot_cols[0].metric("Total spend", _format_number(total_spend, "円"))
-        snapshot_cols[1].metric("Average", _format_number(avg_spend, "円"))
-        snapshot_cols[0].metric("Max spend", _format_number(max_spend, "円"))
-        snapshot_cols[1].metric("Count", _format_number(count))
+        snapshot_cols[0].metric("総支出", _format_number(total_spend, "円"))
+        snapshot_cols[1].metric("平均", _format_number(avg_spend, "円"))
+        snapshot_cols[0].metric("最大支出", _format_number(max_spend, "円"))
+        snapshot_cols[1].metric("件数", _format_number(count))
 
     top_left, top_right = st.columns(2)
     with top_left:
@@ -830,7 +860,7 @@ def _render_validation(last_run: dict[str, Any]) -> None:
             empty_message="警告はありません。",
         )
 
-    tab_errors, tab_warnings, tab_clean = st.tabs(["Errors", "Warnings", "Clean Preview"])
+    tab_errors, tab_warnings, tab_clean = st.tabs(["エラー", "警告", "クリーンプレビュー"])
 
     with tab_errors:
         if errors:
@@ -868,41 +898,41 @@ def _render_summary(last_run: dict[str, Any]) -> None:
 
     month_rows = _pairs_to_display_rows(
         _summary_pairs(summary, "month_total"),
-        key_label="month",
-        value_label="amount",
+        key_label="月",
+        value_label="金額",
     )
     category_rows = _pairs_to_display_rows(
         _summary_pairs(summary, "category_total"),
-        key_label="category",
-        value_label="amount",
+        key_label="カテゴリ",
+        value_label="金額",
     )
     merchant_rows = _pairs_to_display_rows(
         _summary_pairs(summary, "merchant_top"),
-        key_label="merchant",
-        value_label="amount",
+        key_label="支出先",
+        value_label="金額",
     )
     weekday_rows = _pairs_to_display_rows(
         _summary_pairs(summary, "weekday_total"),
-        key_label="weekday",
-        value_label="amount",
+        key_label="曜日",
+        value_label="金額",
     )
     stats = _summary_stats(summary)
     stats_rows = [
-        {"metric": key, "value": _format_number(value, "円" if key != "count" else "")}
+        {"項目": key, "値": _format_number(value, "円" if key != "count" else "")}
         for key, value in stats.items()
     ]
 
     top_left, top_right = st.columns(2)
     with top_left:
-        st.subheader("Month / Category")
+        st.subheader("月別 / カテゴリ別")
         st.dataframe(month_rows, use_container_width=True, hide_index=True)
         st.dataframe(category_rows, use_container_width=True, hide_index=True)
     with top_right:
-        st.subheader("Merchant / Weekday")
+        st.subheader("支出先 / 曜日別")
         st.dataframe(merchant_rows, use_container_width=True, hide_index=True)
         st.dataframe(weekday_rows, use_container_width=True, hide_index=True)
 
-    st.subheader("Stats")
+    st.subheader("統計")
     st.dataframe(stats_rows, use_container_width=True, hide_index=True)
 
 
@@ -915,16 +945,16 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
 
     file_col, button_col = st.columns([0.9, 1.1])
     with file_col:
-        st.subheader("Generated files")
+        st.subheader("生成ファイル")
         for path in output_paths.values():
             _render_html_markup(f'<div class="file-chip">{escape(str(path))}</div>')
 
     with button_col:
-        st.subheader("Download outputs")
+        st.subheader("ダウンロード")
         source_bytes = last_run.get("source_bytes")
         if isinstance(source_bytes, bytes):
             st.download_button(
-                label="Source CSV",
+                label="元のCSVをダウンロード",
                 data=source_bytes,
                 file_name=last_run["source_name"],
                 mime="text/csv",
@@ -952,10 +982,10 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
                 continue
             payload = _read_bytes(output_path)
             if payload is None:
-                st.warning(f"Could not read output file: {output_path}")
+                st.warning(f"出力ファイルを読み込めませんでした: {output_path}")
                 continue
             st.download_button(
-                label=f"Download {label}",
+                label=f"{label} をダウンロード",
                 data=payload,
                 file_name=output_path.name,
                 mime=mime,
@@ -974,27 +1004,27 @@ def main() -> None:
 
     # 入力部はサイドバーに寄せ、中央カラムは結果の読解に専念できるようにする。
     with st.sidebar:
-        st.header("Run control")
+        st.header("実行設定")
         uploaded_csv = st.file_uploader("CSV ファイル", type=["csv"])
         st.caption("必須列: date / amount / merchant / category")
 
-        with st.expander("Report options", expanded=True):
-            top_n = st.number_input("Top merchants", min_value=1, max_value=50, value=10, step=1)
-            do_excel = st.checkbox("Generate Excel (.xlsx)", value=True)
-            do_html = st.checkbox("Generate HTML report", value=True)
+        with st.expander("レポート設定", expanded=True):
+            top_n = st.number_input("上位の支出先数", min_value=1, max_value=50, value=10, step=1)
+            do_excel = st.checkbox("Excel (.xlsx) を生成", value=True)
+            do_html = st.checkbox("HTML レポートを生成", value=True)
 
-        with st.expander("Paths", expanded=False):
-            rules_path_str = st.text_input("rules.json path", value="rules.json")
-            out_dir_str = st.text_input("Output directory", value="out/gui")
+        with st.expander("パス設定", expanded=False):
+            rules_path_str = st.text_input("rules.json のパス", value="rules.json")
+            out_dir_str = st.text_input("出力先ディレクトリ", value="out/gui")
 
         st.divider()
-        st.caption("Quick samples")
-        run_upload_btn = st.button("Run uploaded CSV", type="primary", use_container_width=True)
+        st.caption("サンプル実行")
+        run_upload_btn = st.button("アップロードした CSV を実行", type="primary", use_container_width=True)
         sample_bad_col, sample_good_col = st.columns(2)
         with sample_bad_col:
-            run_sample_bad_btn = st.button("sample_bad", use_container_width=True)
+            run_sample_bad_btn = st.button("エラーあり", use_container_width=True)
         with sample_good_col:
-            run_sample_good_btn = st.button("sample_good", use_container_width=True)
+            run_sample_good_btn = st.button("正常サンプル", use_container_width=True)
 
     run_error: str | None = None
 
@@ -1005,12 +1035,12 @@ def main() -> None:
         result: dict[str, Any] | None = None
 
         if not rules_path.exists():
-            run_error = f"rules.json not found: {rules_path}"
+            run_error = f"rules.json が見つかりません: {rules_path}"
         else:
             try:
                 if run_upload_btn:
                     if uploaded_csv is None:
-                        run_error = "Please upload a CSV file before running."
+                        run_error = "実行前に CSV ファイルをアップロードしてください。"
                     else:
                         # アップロードファイルも一度パス付きファイルにして、共通関数へ渡す。
                         with tempfile.TemporaryDirectory() as tmp:
@@ -1030,7 +1060,7 @@ def main() -> None:
                         SAMPLE_BAD_CSV_PATH if run_sample_bad_btn else SAMPLE_GOOD_CSV_PATH
                     )
                     if not sample_csv_path.exists():
-                        run_error = f"Sample CSV not found: {sample_csv_path}"
+                        run_error = f"サンプル CSV が見つかりません: {sample_csv_path}"
                     else:
                         result = _run_pipeline(
                             csv_path=sample_csv_path,
@@ -1044,7 +1074,7 @@ def main() -> None:
                             result["source_path"] = str(sample_csv_path.resolve())
                             result["source_bytes"] = _read_bytes(sample_csv_path)
             except Exception as exc:  # pragma: no cover - UI surface
-                run_error = f"Run failed: {exc}"
+                run_error = f"実行に失敗しました: {exc}"
 
         if result is not None:
             # rerun 後もタブ表示やダウンロードボタンを維持するため、結果を保存する。
@@ -1062,7 +1092,7 @@ def main() -> None:
 
     # 情報量が多いので、読み順に合わせてタブを分ける。
     tab_overview, tab_validation, tab_summary, tab_downloads = st.tabs(
-        ["Overview", "Validation", "Summary", "Downloads"]
+        ["概要", "検証", "集計", "ダウンロード"]
     )
     with tab_overview:
         _render_overview(last_run)
