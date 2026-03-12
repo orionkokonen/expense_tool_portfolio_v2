@@ -11,6 +11,10 @@
 - Added explicit typed row models for warnings and summary data, and aligned `rules.py`, `app.py`, and report exporters with the normalized data flow.
 - Tightened Streamlit typing around uploads, counters, output paths, and `defaultdict` usage so `ruff`, `mypy`, and `pytest` all pass locally again.
 - Fixed Streamlit cards rendering raw HTML as plain text by normalizing indented HTML fragments before passing them to `st.markdown(..., unsafe_allow_html=True)`.
+- Localized Streamlit UI labels in `app.py`, including the sidebar, tabs, metrics, and download controls, so the screen reads consistently in Japanese.
+- Replaced the visible English text of `st.file_uploader` with Japanese display text via CSS overrides, covering the drag-and-drop hint and browse button.
+- Fixed a CI failure caused by a Ruff `E501` line-length violation in the localized upload button definition.
+- Added beginner-friendly comments around the recent UI localization and CI-related changes so the intent of the code is easier to follow while reading.
 
 　
 

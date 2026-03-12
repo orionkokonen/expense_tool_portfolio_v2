@@ -89,6 +89,8 @@ def _inject_styles() -> None:
             background: rgba(252, 250, 245, 0.78);
           }
 
+          /* Streamlit 標準のアップロード欄は文言を直接日本語化しにくい。
+             そこで元の英語を見えなくし、見た目だけ日本語へ差し替える。 */
           [data-testid="stFileUploaderDropzoneInstructions"] > div:first-child,
           [data-testid="stFileUploaderDropzoneInstructions"] > span:first-child {
             font-size: 0;
@@ -786,6 +788,7 @@ def _render_overview(last_run: dict[str, Any]) -> None:
     if last_run["input_count"]:
         pass_rate = last_run["clean_count"] / last_run["input_count"]
 
+    # 指標名を日本語でそろえておくと、サイドバーと結果欄を行き来しても意味を迷いにくい。
     metric_cols = st.columns(5)
     metric_cols[0].metric("入力行数", _format_number(last_run["input_count"]))
     metric_cols[1].metric("クリーン行数", _format_number(last_run["clean_count"]))
@@ -917,6 +920,7 @@ def _render_summary(last_run: dict[str, Any]) -> None:
         value_label="金額",
     )
     stats = _summary_stats(summary)
+    # `count` だけは件数なので単位を付けず、それ以外は金額として見せる。
     stats_rows = [
         {"項目": key, "値": _format_number(value, "円" if key != "count" else "")}
         for key, value in stats.items()
@@ -1004,6 +1008,7 @@ def main() -> None:
 
     # 入力部はサイドバーに寄せ、中央カラムは結果の読解に専念できるようにする。
     with st.sidebar:
+        # まず「何を入力する場所か」が分かるよう、見出しやラベルを日本語で統一する。
         st.header("実行設定")
         uploaded_csv = st.file_uploader("CSV ファイル", type=["csv"])
         st.caption("必須列: date / amount / merchant / category")
@@ -1019,6 +1024,8 @@ def main() -> None:
 
         st.divider()
         st.caption("サンプル実行")
+        # 引数を縦に並べておくと、文言が長くなっても行が伸びすぎず、
+        # Ruff の行長チェックで CI が落ちる事故を防ぎやすい。
         run_upload_btn = st.button(
             "アップロードした CSV を実行",
             type="primary",
@@ -1094,7 +1101,8 @@ def main() -> None:
 
     _render_run_header(last_run)
 
-    # 情報量が多いので、読み順に合わせてタブを分ける。
+    # 情報を「全体像 → 検証 → 集計 → ダウンロード」の順で読む前提で並べる。
+    # ラベルも日本語にして、画面全体の用語をそろえる。
     tab_overview, tab_validation, tab_summary, tab_downloads = st.tabs(
         ["概要", "検証", "集計", "ダウンロード"]
     )
