@@ -2,6 +2,7 @@ from ui_html import normalize_html_fragment
 
 
 def test_normalize_html_fragment_removes_leading_indentation() -> None:
+    """行頭の空白が落ち、HTML がコード表示に化けないことを守る。"""
     raw = """
         <div class="bar-card">
           <h3>Monthly total</h3>
@@ -28,6 +29,7 @@ def test_normalize_html_fragment_removes_leading_indentation() -> None:
 
 
 def test_normalize_html_fragment_drops_blank_lines() -> None:
+    """余分な空行を消しても、HTML の並び順は保たれることを確認する。"""
     raw = """
 
         <div>

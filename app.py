@@ -43,14 +43,23 @@ st.set_page_config(page_title="Expense Tool Portfolio 2.0", layout="wide")
 
 
 def _render_html_markup(markup: str) -> None:
-    """Render raw HTML without leaving leading spaces for Markdown to interpret."""
+    """HTML 文字列を Streamlit に渡す前の共通入口。
+
+    `st.markdown(..., unsafe_allow_html=True)` は HTML を描画できるが、
+    複数行文字列の行頭に空白が残っていると Markdown 側が
+    「コードブロック」と誤解してしまうことがある。
+    毎回同じ前処理を忘れないよう、この関数でまとめて吸収する。
+    """
+    # 表示崩れの原因だった「先頭インデント付き HTML」をここで必ず正規化する。
     st.markdown(normalize_html_fragment(markup), unsafe_allow_html=True)
 
 
 def _inject_styles() -> None:
-    """見た目用の CSS をまとめて差し込む。
+    """画面全体で使う CSS をまとめて差し込む。
 
-    ロジックと見た目を分けておくと、画面調整で集計処理を壊しにくい。
+    見た目の調整を 1 か所へ集めておくと、配色や余白を直したいときに
+    集計ロジックまで触らずに済む。初心者でも「見た目」と「処理」の
+    役割を分けて追いやすくなる。
     """
     _render_html_markup(
         """
@@ -402,9 +411,11 @@ def _count_error_reasons(errors: list[IssueRow]) -> list[tuple[str, int]]:
 
 
 def _render_html_card(title: str, body: str, eyebrow: str | None = None) -> None:
-    """説明カードの共通 HTML を描画する。
+    """説明カードの外枠をそろえて描画する。
 
-    タイトル類は escape() して、想定外の HTML が混ざっても表示崩れしにくくする。
+    `body` にはカードの中身の HTML を渡し、この関数では枠や見出しを担当する。
+    タイトル類を `escape()` しておくと、CSV 由来の文字列に `<` や `>` が混ざっても
+    HTML のタグとして誤解されず、表示崩れを防げる。
     """
     eyebrow_html = f'<div class="eyebrow">{escape(eyebrow)}</div>' if eyebrow else ""
     _render_html_markup(
@@ -426,9 +437,11 @@ def _render_bar_card(
     tone: str = "default",
     empty_message: str = "表示できるデータがありません。",
 ) -> None:
-    """棒グラフ風のカードを描画する。
+    """横棒グラフ風のカードを HTML と CSS だけで描画する。
 
-    最大値に対する比率で幅を決め、数字の差をぱっと見でつかみやすくする。
+    専用のグラフライブラリを使わず、金額に応じて棒の幅を変えている。
+    数字だけでなく長さでも差が分かるので、一覧をざっと見たときに
+    傾向をつかみやすい。
     """
     if not pairs:
         _render_html_markup(
@@ -441,11 +454,12 @@ def _render_bar_card(
         )
         return
 
-    # 0 除算を避けるため、最大値が 0 の場合でも 1 を下限にする。
+    # 全件が 0 円でも 0 で割って幅計算が壊れないよう、最低値を 1 にして守る。
     max_value = max(value for _, value in pairs) or 1
     rows_html: list[str] = []
     for label, value in pairs:
-        # 値が小さくても棒が見えるよう、最小幅を少しだけ確保する。
+        # 値が小さい項目でも棒が完全に消えると比較しづらい。
+        # 最低幅を少し残して、「項目が存在すること」が目で分かるようにする。
         width = max(8, round((value / max_value) * 100))
         rows_html.append(
             f"""
@@ -461,6 +475,7 @@ def _render_bar_card(
             """
         )
 
+    # 行ごとに作った HTML を 1 枚のカードへまとめ、共通入口から描画する。
     _render_html_markup(
         f"""
         <div class="bar-card">
