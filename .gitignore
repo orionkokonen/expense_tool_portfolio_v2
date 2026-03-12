@@ -23,3 +23,15 @@ Thumbs.db
 # CI 依存パッケージ（いらない）
 .ci_deps/
 .tmp_mypy/
+
+# テスト・型チェックキャッシュ（いらない）
+.mypy_cache/
+.pytest_cache/
+pytest-cache-files-*/
+
+# 仮想環境（CI 作業用）
+.venv_ci/
+.venv_work/
+
+# 一時ファイル
+.tmp/
