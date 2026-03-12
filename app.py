@@ -1012,6 +1012,11 @@ def main() -> None:
         st.header("実行設定")
         uploaded_csv = st.file_uploader("CSV ファイル", type=["csv"])
         st.caption("必須列: date / amount / merchant / category")
+        run_upload_btn = st.button(
+            "アップロードした CSV を実行",
+            type="primary",
+            use_container_width=True,
+        )
 
         with st.expander("レポート設定", expanded=True):
             top_n = st.number_input("上位の支出先数", min_value=1, max_value=50, value=10, step=1)
@@ -1026,13 +1031,6 @@ def main() -> None:
 
         st.divider()
         st.caption("サンプル実行")
-        # 引数を縦に並べておくと、文言が長くなっても行が伸びすぎず、
-        # Ruff の行長チェックで CI が落ちる事故を防ぎやすい。
-        run_upload_btn = st.button(
-            "アップロードした CSV を実行",
-            type="primary",
-            use_container_width=True,
-        )
         sample_bad_col, sample_good_col = st.columns(2)
         with sample_bad_col:
             run_sample_bad_btn = st.button("エラーあり", use_container_width=True)
