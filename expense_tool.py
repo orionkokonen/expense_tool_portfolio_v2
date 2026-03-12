@@ -92,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    # Path にしておくと、結合や存在確認を OS 差分をあまり意識せず書ける。
+    # Path を使うと、パスの結合や存在確認を OS の違いを気にせず書ける。
     csv_path = Path(args.csv_path)
     rules_path = Path(args.rules)
 

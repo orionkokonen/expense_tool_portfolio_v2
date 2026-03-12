@@ -48,7 +48,7 @@ def _render_html_markup(markup: str) -> None:
     `st.markdown(..., unsafe_allow_html=True)` は HTML を描画できるが、
     複数行文字列の行頭に空白が残っていると Markdown 側が
     「コードブロック」と誤解してしまうことがある。
-    毎回同じ前処理を忘れないよう、この関数でまとめて吸収する。
+    毎回同じ前処理を書き忘れないよう、この関数に集約している。
     """
     # 表示崩れの原因だった「先頭インデント付き HTML」をここで必ず正規化する。
     st.markdown(normalize_html_fragment(markup), unsafe_allow_html=True)
@@ -583,7 +583,7 @@ def _run_pipeline(
     xlsx_path = out_dir / _stamp_name(prefix, "report", "xlsx")
     html_path = out_dir / _stamp_name(prefix, "report", "html")
 
-    # 重い出力はチェックボックスで切り替えられるようにして、試行を軽くする。
+    # 生成に時間のかかる出力はチェックボックスで切り替えられるようにして、必要なときだけ動かす。
     if do_excel:
         write_xlsx_report(
             path=xlsx_path,
@@ -804,7 +804,7 @@ def _render_overview(last_run: dict[str, Any]) -> None:
     if last_run["input_count"]:
         pass_rate = last_run["clean_count"] / last_run["input_count"]
 
-    # 指標名を日本語でそろえておくと、サイドバーと結果欄を行き来しても意味を迷いにくい。
+    # 指標名を日本語で統一しておくと、サイドバーと結果欄を行き来しても意味を見失いにくい。
     metric_cols = st.columns(5)
     metric_cols[0].metric("入力行数", _format_number(last_run["input_count"]))
     metric_cols[1].metric("クリーン行数", _format_number(last_run["clean_count"]))
