@@ -1,4 +1,5 @@
 <!-- 学習用メモ: CHANGELOG は「今どう動くか」より「いつ何が変わったか」を見る場所。 -->
+
 # CHANGELOG
 
 このファイルは、ブラッシュアップや機能追加の履歴を時系列で記録します。
@@ -10,7 +11,8 @@
 - Added explicit typed row models for warnings and summary data, and aligned `rules.py`, `app.py`, and report exporters with the normalized data flow.
 - Tightened Streamlit typing around uploads, counters, output paths, and `defaultdict` usage so `ruff`, `mypy`, and `pytest` all pass locally again.
 - Fixed Streamlit cards rendering raw HTML as plain text by normalizing indented HTML fragments before passing them to `st.markdown(..., unsafe_allow_html=True)`.
-- Added `ui_html.py` and regression coverage for HTML fragment normalization, and expanded beginner-friendly comments around the new rendering path in `app.py` and related tests.
+
+　
 
 ## v0.3
 
