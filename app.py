@@ -29,6 +29,7 @@ from expense_core import (
 )
 from html_report import write_html_report
 from rules import apply_rules, load_rules
+from ui_html import normalize_html_fragment
 
 # セッションに直前の実行結果を残し、画面が再描画されても結果を見失わないようにする。
 LAST_RUN_KEY = "last_run"
@@ -40,12 +41,18 @@ SAMPLE_GOOD_CSV_PATH = Path("data/sample_good.csv")
 st.set_page_config(page_title="Expense Tool Portfolio 2.0", layout="wide")
 
 
+
+def _render_html_markup(markup: str) -> None:
+    """Render raw HTML without leaving leading spaces for Markdown to interpret."""
+    st.markdown(normalize_html_fragment(markup), unsafe_allow_html=True)
+
+
 def _inject_styles() -> None:
     """見た目用の CSS をまとめて差し込む。
 
     ロジックと見た目を分けておくと、画面調整で集計処理を壊しにくい。
     """
-    st.markdown(
+    _render_html_markup(
         """
         <style>
           :root {
@@ -254,8 +261,7 @@ def _inject_styles() -> None:
             padding: 0.75rem 0.9rem;
           }
         </style>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -401,15 +407,14 @@ def _render_html_card(title: str, body: str, eyebrow: str | None = None) -> None
     タイトル類は escape() して、想定外の HTML が混ざっても表示崩れしにくくする。
     """
     eyebrow_html = f'<div class="eyebrow">{escape(eyebrow)}</div>' if eyebrow else ""
-    st.markdown(
+    _render_html_markup(
         f"""
         <div class="soft-card">
           {eyebrow_html}
           <h3>{escape(title)}</h3>
           {body}
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -426,14 +431,13 @@ def _render_bar_card(
     最大値に対する比率で幅を決め、数字の差をぱっと見でつかみやすくする。
     """
     if not pairs:
-        st.markdown(
+        _render_html_markup(
             f"""
             <div class="bar-card">
               <h3>{escape(title)}</h3>
               <p class="empty-copy">{escape(empty_message)}</p>
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
         return
 
@@ -457,14 +461,13 @@ def _render_bar_card(
             """
         )
 
-    st.markdown(
+    _render_html_markup(
         f"""
         <div class="bar-card">
           <h3>{escape(title)}</h3>
           {''.join(rows_html)}
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -560,7 +563,7 @@ def _render_hero() -> None:
 
     初見でも「この画面で何ができるか」が最初の数秒で分かるようにする。
     """
-    st.markdown(
+    _render_html_markup(
         """
         <div class="hero">
           <div class="eyebrow">Portfolio 2.0</div>
@@ -575,8 +578,7 @@ def _render_hero() -> None:
             <div class="hero-tag">CSV / Excel / HTML</div>
           </div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -700,15 +702,14 @@ def _render_run_header(last_run: dict[str, Any]) -> None:
         copy = "検証とルール適用の両方を通過しており、成果物の配布に進めます。"
 
     source_name = escape(last_run["source_name"])
-    st.markdown(
+    _render_html_markup(
         f"""
         <div class="hero">
           <div class="eyebrow">{eyebrow}</div>
           <h2>{headline}</h2>
           <p>{copy}<br />Source: <strong>{source_name}</strong></p>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     source_path = last_run.get("source_path")
@@ -901,10 +902,7 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
     with file_col:
         st.subheader("Generated files")
         for path in output_paths.values():
-            st.markdown(
-                f'<div class="file-chip">{escape(str(path))}</div>',
-                unsafe_allow_html=True,
-            )
+            _render_html_markup(f'<div class="file-chip">{escape(str(path))}</div>')
 
     with button_col:
         st.subheader("Download outputs")
