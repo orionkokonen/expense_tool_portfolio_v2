@@ -1019,7 +1019,9 @@ def main() -> None:
             do_html = st.checkbox("HTML レポートを生成", value=True)
 
         with st.expander("パス設定", expanded=False):
+            st.caption("rules.json のパス = 判定ルールの置き場所")
             rules_path_str = st.text_input("rules.json のパス", value="rules.json")
+            st.caption("出力先ディレクトリ = 結果ファイルの保存先")
             out_dir_str = st.text_input("出力先ディレクトリ", value="out/gui")
 
         st.divider()
