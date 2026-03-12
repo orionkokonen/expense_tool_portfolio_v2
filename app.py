@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Streamlit UI for the expense tool portfolio."""
+"""Expense Tool の Streamlit 画面。
+
+CLI と同じ処理パイプラインをボタン操作でたどれるようにし、
+入力 -> 判定 -> 集計 -> ダウンロードを一画面で追えるようにしている。
+"""
 
 from __future__ import annotations
 
@@ -26,15 +30,21 @@ from expense_core import (
 from html_report import write_html_report
 from rules import apply_rules, load_rules
 
+# セッションに直前の実行結果を残し、画面が再描画されても結果を見失わないようにする。
 LAST_RUN_KEY = "last_run"
+# サンプル CSV は「まず触ってみる」入口。入力形式の学習にも使う。
 SAMPLE_BAD_CSV_PATH = Path("data/sample_bad.csv")
 SAMPLE_GOOD_CSV_PATH = Path("data/sample_good.csv")
 
+# Streamlit のページ設定は先に一度だけ行う必要がある。
 st.set_page_config(page_title="Expense Tool Portfolio 2.0", layout="wide")
 
 
 def _inject_styles() -> None:
-    """Add a readability-first visual layer without changing app logic."""
+    """見た目用の CSS をまとめて差し込む。
+
+    ロジックと見た目を分けておくと、画面調整で集計処理を壊しにくい。
+    """
     st.markdown(
         """
         <style>
@@ -250,20 +260,33 @@ def _inject_styles() -> None:
 
 
 def _ensure_dir(path: Path) -> None:
+    """出力先フォルダを先に作る。
+
+    書き込み時の FileNotFoundError を避けるため、親フォルダもまとめて用意する。
+    """
     path.mkdir(parents=True, exist_ok=True)
 
 
 def _save_upload(uploaded_file: UploadedFile, dir_path: Path) -> Path:
+    """アップロードされた CSV を一時フォルダへ保存する。
+
+    画面から受け取る UploadedFile を、既存のファイルパス前提の処理へ渡せる形にそろえる。
+    """
     path = dir_path / str(uploaded_file.name)
     path.write_bytes(uploaded_file.getbuffer())
     return path
 
 
 def _stamp_name(prefix: str, base: str, ext: str) -> str:
+    """出力ファイル名を共通ルールで組み立てる。"""
     return f"{prefix}_{base}.{ext}"
 
 
 def _read_bytes(path: Path) -> bytes | None:
+    """ダウンロード用にファイルを bytes で読む。
+
+    読めない場合は None を返し、画面側で警告表示に回してアプリ全体は止めない。
+    """
     try:
         return path.read_bytes()
     except OSError:
@@ -271,6 +294,10 @@ def _read_bytes(path: Path) -> bytes | None:
 
 
 def _to_int(value: Any) -> int | None:
+    """値を整数に寄せる。
+
+    変換失敗で例外を投げず None にすることで、表示側の集計処理を安全に続けやすくする。
+    """
     try:
         return int(value)
     except (TypeError, ValueError):
@@ -278,12 +305,20 @@ def _to_int(value: Any) -> int | None:
 
 
 def _format_number(value: int | None, suffix: str = "") -> str:
+    """数値を画面向けの表示文字列にする。
+
+    None を "-" にして、「まだ計算できない」と 0 を見分けやすくする。
+    """
     if value is None:
         return "-"
     return f"{value:,}{suffix}"
 
 
 def _summary_pairs(summary: list[SummaryRow], summary_type: str) -> list[tuple[str, int]]:
+    """summary の共通形式から、グラフ向けの `(ラベル, 数値)` を抜き出す。
+
+    ヘッダ行や数値でない値はここで除外し、描画側の分岐を減らす。
+    """
     pairs: list[tuple[str, int]] = []
     for row in summary:
         if row["type"] != summary_type:
@@ -299,6 +334,10 @@ def _summary_pairs(summary: list[SummaryRow], summary_type: str) -> list[tuple[s
 
 
 def _summary_stats(summary: list[SummaryRow]) -> dict[str, int]:
+    """summary から統計値だけを辞書にまとめ直す。
+
+    `average` や `max` を名前で引けるようにして、画面側の読みやすさを保つ。
+    """
     stats: dict[str, int] = {}
     for row in summary:
         if row["type"] != "stats":
@@ -319,6 +358,10 @@ def _pairs_to_display_rows(
     value_label: str,
     suffix: str = "円",
 ) -> list[dict[str, str]]:
+    """データフレーム表示用の辞書リストへ整形する。
+
+    列名を引数で受け取ることで、月別・カテゴリ別など複数の表で同じ関数を再利用できる。
+    """
     return [
         {key_label: key, value_label: _format_number(value, suffix)}
         for key, value in pairs
@@ -326,6 +369,7 @@ def _pairs_to_display_rows(
 
 
 def _count_warning_kinds(warnings: list[WarningRow]) -> list[tuple[str, int]]:
+    """警告の種類ごとの件数を数える。"""
     counts: Counter[str] = Counter()
     for warning in warnings:
         kind = warning["kind"].strip()
@@ -335,6 +379,10 @@ def _count_warning_kinds(warnings: list[WarningRow]) -> list[tuple[str, int]]:
 
 
 def _count_error_reasons(errors: list[IssueRow]) -> list[tuple[str, int]]:
+    """エラー理由ごとの件数を数える。
+
+    `reason` は " / " 区切りで複数理由を持てるため、先に分解してから集計する。
+    """
     counts: Counter[str] = Counter()
     for error in errors:
         text = error["reason"].strip()
@@ -348,6 +396,10 @@ def _count_error_reasons(errors: list[IssueRow]) -> list[tuple[str, int]]:
 
 
 def _render_html_card(title: str, body: str, eyebrow: str | None = None) -> None:
+    """説明カードの共通 HTML を描画する。
+
+    タイトル類は escape() して、想定外の HTML が混ざっても表示崩れしにくくする。
+    """
     eyebrow_html = f'<div class="eyebrow">{escape(eyebrow)}</div>' if eyebrow else ""
     st.markdown(
         f"""
@@ -369,6 +421,10 @@ def _render_bar_card(
     tone: str = "default",
     empty_message: str = "表示できるデータがありません。",
 ) -> None:
+    """棒グラフ風のカードを描画する。
+
+    最大値に対する比率で幅を決め、数字の差をぱっと見でつかみやすくする。
+    """
     if not pairs:
         st.markdown(
             f"""
@@ -381,9 +437,11 @@ def _render_bar_card(
         )
         return
 
+    # 0 除算を避けるため、最大値が 0 の場合でも 1 を下限にする。
     max_value = max(value for _, value in pairs) or 1
     rows_html: list[str] = []
     for label, value in pairs:
+        # 値が小さくても棒が見えるよう、最小幅を少しだけ確保する。
         width = max(8, round((value / max_value) * 100))
         rows_html.append(
             f"""
@@ -419,9 +477,14 @@ def _run_pipeline(
     do_excel: bool,
     do_html: bool,
 ) -> dict[str, Any]:
+    """GUI から使う共通実行パイプライン。
+
+    CLI と同じ順序で処理し、画面表示とダウンロードに必要な情報をまとめて返す。
+    """
     _ensure_dir(out_dir)
     prefix = csv_path.stem
 
+    # まず「入力として読めるか」を確認し、その後で社内ルールと集計へ進む。
     rows = read_csv(str(csv_path))
     ok_rows, errors = check_rows(rows)
     rules = load_rules(rules_path)
@@ -429,6 +492,7 @@ def _run_pipeline(
     clean_rows, warnings = apply_rules(ok_norm, rules)
     summary = make_summary(clean_rows, top_n=top_n)
 
+    # 画面からも外部ファイルからも追いやすいよう、成果物の名前を統一する。
     errors_csv = out_dir / _stamp_name(prefix, "errors", "csv")
     warnings_csv = out_dir / _stamp_name(prefix, "warnings", "csv")
     clean_csv = out_dir / _stamp_name(prefix, "clean", "csv")
@@ -453,6 +517,7 @@ def _run_pipeline(
     xlsx_path = out_dir / _stamp_name(prefix, "report", "xlsx")
     html_path = out_dir / _stamp_name(prefix, "report", "html")
 
+    # 重い出力はチェックボックスで切り替えられるようにして、試行を軽くする。
     if do_excel:
         write_xlsx_report(
             path=xlsx_path,
@@ -474,6 +539,7 @@ def _run_pipeline(
         )
         output_paths["report_html"] = html_path
 
+    # 画面は再描画が多いので、必要な材料を 1 つの辞書にまとめて session_state に入れる。
     return {
         "source_name": csv_path.name,
         "errors": errors,
@@ -490,6 +556,10 @@ def _run_pipeline(
 
 
 def _render_hero() -> None:
+    """画面上部の導入ブロックを描画する。
+
+    初見でも「この画面で何ができるか」が最初の数秒で分かるようにする。
+    """
     st.markdown(
         """
         <div class="hero">
@@ -511,6 +581,10 @@ def _render_hero() -> None:
 
 
 def _render_empty_state() -> None:
+    """まだ実行していないときの案内画面を描画する。
+
+    最初の一歩を UI 内に置いておくと、README を開かなくても試し始めやすい。
+    """
     st.caption("左サイドバーで CSV を選ぶか、サンプルを実行してください。")
 
     step1, step2, step3 = st.columns(3)
@@ -578,6 +652,10 @@ def _build_insights(
     category_pairs: list[tuple[str, int]],
     merchant_pairs: list[tuple[str, int]],
 ) -> list[str]:
+    """結果から短い要点文を組み立てる。
+
+    数字だけでは優先順位が分かりにくいので、「まず何を見るか」を文章で先に示す。
+    """
     lines: list[str] = []
 
     if errors:
@@ -601,6 +679,10 @@ def _build_insights(
 
 
 def _render_run_header(last_run: dict[str, Any]) -> None:
+    """直近実行の状態を一言で示すヘッダを描画する。
+
+    先に修正すべきか、確認して配布へ進めるかを冒頭で判断できるようにする。
+    """
     errors = last_run["errors"]
     warnings = last_run["warnings"]
 
@@ -635,6 +717,10 @@ def _render_run_header(last_run: dict[str, Any]) -> None:
 
 
 def _render_overview(last_run: dict[str, Any]) -> None:
+    """全体像タブを描画する。
+
+    件数メトリクス、要点メモ、主要グラフをまとめ、詳細を見る前に状況をつかめるようにする。
+    """
     errors = last_run["errors"]
     warnings = last_run["warnings"]
     summary = last_run["summary"]
@@ -649,6 +735,7 @@ def _render_overview(last_run: dict[str, Any]) -> None:
     avg_spend = stats.get("average")
     max_spend = stats.get("max")
     count = stats.get("count", last_run["clean_count"])
+    # 入力全体のうち、最終的に clean_rows へ残った割合を見る。
     pass_rate = 0.0
     if last_run["input_count"]:
         pass_rate = last_run["clean_count"] / last_run["input_count"]
@@ -701,6 +788,10 @@ def _render_overview(last_run: dict[str, Any]) -> None:
 
 
 def _render_validation(last_run: dict[str, Any]) -> None:
+    """検証結果タブを描画する。
+
+    エラー・警告・クリーン行を分けて見せ、必要な情報だけを段階的に開けるようにする。
+    """
     errors = last_run["errors"]
     warnings = last_run["warnings"]
     clean_rows = last_run["clean_rows"]
@@ -738,6 +829,7 @@ def _render_validation(last_run: dict[str, Any]) -> None:
             st.success("警告はありません。")
 
     with tab_clean:
+        # 画面が重くならないよう、プレビューは先頭 100 行までに絞る。
         preview_rows = [
             {
                 "date": row.get("date", ""),
@@ -755,6 +847,7 @@ def _render_validation(last_run: dict[str, Any]) -> None:
 
 
 def _render_summary(last_run: dict[str, Any]) -> None:
+    """summary.csv 相当の内容を画面向けに並べ直して表示する。"""
     summary = last_run["summary"]
 
     month_rows = _pairs_to_display_rows(
@@ -798,6 +891,10 @@ def _render_summary(last_run: dict[str, Any]) -> None:
 
 
 def _render_downloads(last_run: dict[str, Any]) -> None:
+    """生成ファイル一覧とダウンロードボタンを描画する。
+
+    ファイル内容は描画時点で読み直し、直前の実行結果とずれないようにする。
+    """
     output_paths = {key: Path(value) for key, value in last_run["output_paths"].items()}
 
     file_col, button_col = st.columns([0.9, 1.1])
@@ -822,6 +919,7 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
                 key="download_source_csv",
             )
 
+        # 画面ラベルと MIME type をまとめて定義し、ボタン生成を共通化する。
         download_specs = [
             ("errors_csv", "errors.csv", "text/csv"),
             ("warnings_csv", "warnings.csv", "text/csv"),
@@ -854,9 +952,14 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
 
 
 def main() -> None:
+    """Streamlit 画面の入口。
+
+    サイドバーで入力を受け取り、結果を session_state に保存して再描画でも保持する。
+    """
     _inject_styles()
     _render_hero()
 
+    # 入力部はサイドバーに寄せ、中央カラムは結果の読解に専念できるようにする。
     with st.sidebar:
         st.header("Run control")
         uploaded_csv = st.file_uploader("CSV ファイル", type=["csv"])
@@ -882,6 +985,7 @@ def main() -> None:
 
     run_error: str | None = None
 
+    # どのボタンから実行しても、ここから先は同じパイプラインに流す。
     if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
         rules_path = Path(rules_path_str)
         out_dir = Path(out_dir_str)
@@ -895,6 +999,7 @@ def main() -> None:
                     if uploaded_csv is None:
                         run_error = "Please upload a CSV file before running."
                     else:
+                        # アップロードファイルも一度パス付きファイルにして、共通関数へ渡す。
                         with tempfile.TemporaryDirectory() as tmp:
                             csv_path = _save_upload(uploaded_csv, Path(tmp))
                             result = _run_pipeline(
@@ -929,6 +1034,7 @@ def main() -> None:
                 run_error = f"Run failed: {exc}"
 
         if result is not None:
+            # rerun 後もタブ表示やダウンロードボタンを維持するため、結果を保存する。
             st.session_state[LAST_RUN_KEY] = result
 
     if run_error:
@@ -941,6 +1047,7 @@ def main() -> None:
 
     _render_run_header(last_run)
 
+    # 情報量が多いので、読み順に合わせてタブを分ける。
     tab_overview, tab_validation, tab_summary, tab_downloads = st.tabs(
         ["Overview", "Validation", "Summary", "Downloads"]
     )
@@ -954,4 +1061,5 @@ def main() -> None:
         _render_downloads(last_run)
 
 
+# Streamlit はスクリプトを上から実行するので、最後に入口関数を呼ぶ。
 main()

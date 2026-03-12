@@ -1,3 +1,4 @@
+<!-- 学習用メモ: README はコードを読む前の地図。迷ったら「全体の処理の流れ」に戻る。 -->
 # Expense Tool（経費CSVチェック＆レポート生成）
 
 経費データの CSV ファイルを読み込み、**エラー（errors）** と **警告（warnings）** を自動検知して
@@ -186,7 +187,7 @@ date,amount,merchant,category
 
 | 値 | 動作 |
 |---|---|
-| `"warn"` | 警告を出して `fallback_category` に置き換える（おすすめ） |
+| `"warn"` | 警告を出して、入力されたカテゴリのまま通す |
 | `"ignore"` | 警告も出さずそのまま通す |
 | `"fallback"` | `fallback_category` に置き換えて警告も出す |
 

@@ -149,6 +149,7 @@ def write_html_report(
 </body>
 </html>
 """
+    # 保存直前に親フォルダを作っておくと、出力先を変えても失敗しにくい。
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding="utf-8")
 
@@ -160,6 +161,7 @@ def table_html(rows: Sequence[Mapping[str, object]], columns: Sequence[str]) -> 
     CSV の内容に "<script>" のような文字列が含まれていても HTML として実行されない。
     """
     if not rows:
+        # 空テーブルより「データなし」と明示した方が、読み手が迷いにくい。
         return "<p class='muted'>（なし）</p>"
 
     ths = "".join(f"<th>{escape(c)}</th>" for c in columns)

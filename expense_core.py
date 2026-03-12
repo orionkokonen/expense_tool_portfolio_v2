@@ -3,6 +3,7 @@
 expense_core.py — データ処理の中心部
 CSV 読み込み / 基本入力チェック / 型変換 / 集計 / CSV 書き出しを担う。
 社内ルールのチェックは rules.py 側が行う。
+「まず入力として正しいか」をここで固めることで、後続処理を単純にしている。
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from datetime import datetime
 from statistics import mean, median
 from typing import TypedDict
 
+# この 4 列がそろっていることを処理の前提にする。
 REQUIRED_COLUMNS = ["date", "amount", "merchant", "category"]
 
 
@@ -48,6 +50,10 @@ class IssueRow(TypedDict):
 
 
 class WarningRow(TypedDict):
+    """ルール違反の警告 1 件。
+
+    形式は通っているので、警告があっても clean_rows に残る場合がある。
+    """
     kind: str
     row: str
     date: str
@@ -59,6 +65,10 @@ class WarningRow(TypedDict):
 
 
 class SummaryRow(TypedDict):
+    """集計結果の共通 1 行。
+
+    `type` で表の種類を見分けることで、CSV / Excel / HTML で同じ形を使い回せる。
+    """
     type: str
     key: str
     value: str
@@ -191,6 +201,7 @@ def normalize_ok_rows(ok_rows: list[ExpenseRow]) -> list[ExpenseRowNorm]:
     """
     out: list[ExpenseRowNorm] = []
     for r in ok_rows:
+        # ここで int 化しておくと、後続の集計では金額をそのまま足し算できる。
         out.append(
             {
                 "row": r["row"],
@@ -237,6 +248,7 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[Summary
 
     summary: list[SummaryRow] = []
 
+    # 先頭にヘッダ行を入れておくと、summary.csv を単体で開いたときにも意味が伝わりやすい。
     summary.append({"type": "month_total", "key": "month", "value": "total_amount"})
     for m in sorted(by_month.keys()):
         summary.append({"type": "month_total", "key": m, "value": str(by_month[m])})

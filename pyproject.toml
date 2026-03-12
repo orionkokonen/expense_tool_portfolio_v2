@@ -1,21 +1,27 @@
+# このファイルに、テスト・静的解析・型チェックの設定をまとめる。
 [project]
 name = "expense-tool-portfolio"
 version = "0.2.0"
 requires-python = ">=3.10"
 
+# pytest は tests/ 以下だけを見て、関係ないファイルを拾わないようにする。
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
 
+# ruff は「書き方のミス」を素早く見つける道具。
 [tool.ruff]
 line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
+# まずは基本的なエラー検出に絞り、警告の意味を追いやすくする。
 select = ["E", "F", "I"]
 
+# mypy は「この値は文字列のはずなのに数値として扱っていないか」を見つける道具。
 [tool.mypy]
 python_version = "3.10"
+# いきなり厳しすぎる設定にせず、学習しながら段階的に有効化している。
 warn_return_any = true
 warn_unused_ignores = true
 disallow_untyped_defs = false

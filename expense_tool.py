@@ -52,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    # check / report の両方で使う引数を 1 か所にまとめ、説明のズレを防ぐ。
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("csv_path", help="入力CSVのパス（例: data/expenses.csv）")
     common.add_argument(
@@ -91,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # Path にしておくと、結合や存在確認を OS 差分をあまり意識せず書ける。
     csv_path = Path(args.csv_path)
     rules_path = Path(args.rules)
 

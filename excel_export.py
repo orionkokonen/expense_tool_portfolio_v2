@@ -63,6 +63,7 @@ def write_xlsx_report(
     charts_ws = wb.create_sheet("Charts")
     _build_charts(charts_ws, summary)
 
+    # 出力先の親フォルダがまだなくても、その場で作って保存できるようにする。
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)
 
@@ -157,6 +158,7 @@ def _build_charts(ws, summary: Sequence[SummaryRow]) -> None:
         chart.add_data(data, titles_from_data=True)
         chart.set_categories(cats)
         chart.dataLabels = DataLabelList()
+        # 値ラベルを全部出すと棒が密集したときに読みにくくなるので、ここでは隠す。
         chart.dataLabels.showVal = False
         ws.add_chart(chart, "D3")
 

@@ -3,6 +3,7 @@
 rules.py — 社内ルールの読み込みと適用
 rules.json を読み込み、入力チェック済みの行に対して「社内ルール違反」を検出する。
 違反は warnings として返し、clean_rows にはカテゴリ書き換え後のデータを入れる。
+「止めるべき問題」と「人が確認する問題」を分けるため、ここは警告中心の設計になっている。
 """
 
 from __future__ import annotations
@@ -114,10 +115,12 @@ def apply_rules(
     warnings: list[WarningRow] = []
     clean_rows: list[ExpenseRowNorm] = []
 
+    # list のままだと毎回順番に探すので、集合(set)にして判定を速くする。
     allowed_set = set(rules.allowed_categories or [])
     banned_words = rules.banned_words or []
 
     mode = rules.unknown_category_mode
+    # fallback_category が未設定でも処理が止まらないよう、最後の受け皿を決めておく。
     fb = rules.fallback_category or "その他"
 
     # 上限チェック用に全行の累積合計を保持する辞書

@@ -2,6 +2,7 @@
 """
 tests/test_core.py — expense_core.py の単体テスト
 pytest で実行する。各関数が「正常値・異常値」を正しく判定するかを確認する。
+テスト自体が「この関数をどう使うか」の短い例にもなっている。
 """
 
 from expense_core import check_rows, make_summary, normalize_ok_rows, parse_amount, parse_date
