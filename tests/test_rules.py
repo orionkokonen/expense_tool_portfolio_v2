@@ -39,6 +39,7 @@ def _write_rules(tmp_path: Path, data: dict) -> Path:
 
     tmp_path（pytest 提供の一時フォルダ）に書くので、
     テスト後に自動で片付けられる。
+    本物の rules.json を触らないため、安全に試せる。
     """
     p = tmp_path / "rules.json"
     p.write_text(json.dumps(data), encoding="utf-8")
@@ -151,8 +152,8 @@ class TestApplyRulesCategory:
         )
         rows = [_row(category="食費")]
         clean, warnings = apply_rules(rows, rules)
-        assert len(warnings) == 1  # 警告は出る（記録として）
-        assert clean[0]["category"] == "その他"  # カテゴリが書き換わっている
+        assert len(warnings) == 1  # 置き換えて終わりではなく、記録も残す
+        assert clean[0]["category"] == "その他"  # 集計に使う値は fallback に統一
 
     def test_known_category_no_warning(self) -> None:
         """登録済みカテゴリなら警告が出ないか。"""
@@ -227,7 +228,8 @@ class TestApplyRulesDateRange:
         rules = Rules(date_range=DateRange(min="bad-date", max="2026-12-31"))
         rows = [_row(date="2025-01-01")]
         _, warnings = apply_rules(rows, rules)
-        # min が不正なので min チェック自体がスキップされ、min 由来の警告は出ない
+        # 設定値が壊れていても、アプリ全体が止まるより
+        # その条件だけ無視して続行できたほうが実運用では安全。
         assert not any(w["message"].startswith("日付が範囲外（min=") for w in warnings)
 
 

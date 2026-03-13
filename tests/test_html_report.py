@@ -33,6 +33,7 @@ def _sample_summary() -> list[SummaryRow]:
 
     実際の make_summary() が返す形式に合わせて、
     ヘッダ行（key="month"）+ データ行（key="2026-01"）のペアを作る。
+    本番の全パターンを持ち込まず、必要最小限にすると意図が読みやすい。
     """
     return [
         {"type": "month_total", "key": "month", "value": "total_amount"},
@@ -192,7 +193,8 @@ class TestWriteHtmlReport:
             summary=_sample_summary(),
         )
         content = html_path.read_text(encoding="utf-8")
-        # typeof で Chart の存在を確認するコードがあれば、フォールバック処理がある証拠
+        # `typeof` は「その名前の変数が存在するか」を安全に調べる書き方。
+        # ここでは Chart.js が読み込めたかを確認するために使っている。
         assert "typeof Chart === 'undefined'" in content
 
     def test_creates_parent_directory(self, tmp_path: Path) -> None:

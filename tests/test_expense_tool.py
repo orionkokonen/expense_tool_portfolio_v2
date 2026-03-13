@@ -30,6 +30,7 @@ def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
 
     テストごとに異なる内容の CSV が必要なので、
     ヘルパー関数にして使い回す。
+    こうしておくと、テスト本文は「何を確かめたいか」に集中しやすい。
     """
     fieldnames = ["date", "amount", "merchant", "category"]
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -119,7 +120,8 @@ class TestMainCheck:
         out_dir = tmp_path / "out"
         code = main(["check", str(csv_path), "--out", str(out_dir)])
         assert code == 0
-        # 出力先に errors.csv と warnings.csv が生成されていること
+        # check モードは集計までは行わないが、
+        # 入力チェック結果の 2 ファイルは必ず作られる。
         latest = out_dir / "latest" / "good"
         assert (latest / "errors.csv").exists()
         assert (latest / "warnings.csv").exists()
@@ -149,7 +151,8 @@ class TestMainReport:
         code = main(["report", str(csv_path), "--out", str(out_dir)])
         assert code == 0
         latest = out_dir / "latest" / "good"
-        # check の出力に加えて、集計 CSV とレポートファイルも生成される
+        # report モードは check の結果に加えて、
+        # 集計用 CSV と見やすいレポート形式も作る。
         assert (latest / "errors.csv").exists()
         assert (latest / "warnings.csv").exists()
         assert (latest / "clean.csv").exists()
@@ -166,6 +169,7 @@ class TestMainReport:
         assert code == 0
         history = out_dir / "history" / "good"
         assert history.exists()
-        # タイムスタンプ付きのサブフォルダが 1 つ以上作られていること
+        # ここではファイル名の完全一致までは見ず、
+        # 「履歴保存用の出力が何かしら作られたか」を確認する。
         files = list(history.iterdir())
         assert len(files) > 0

@@ -1090,6 +1090,9 @@ def main() -> None:
         result: dict[str, Any] | None = None
 
         if rules_path is None or out_dir is None:
+            # ここで実行を止める理由:
+            # ユーザー入力をそのまま信用すると、アプリの外にあるファイルへ
+            # 読み書きされる危険があるため。
             run_error = (
                 "パスがプロジェクトディレクトリの外を指しています。"
                 "安全のためブロックしました。"
@@ -1146,6 +1149,8 @@ def main() -> None:
                 json.JSONDecodeError,  # rules.json の JSON 構文エラー
                 OSError,             # ディスク容量不足などの OS レベルのエラー
             ) as exc:
+                # `pragma: no cover` は「この行は自動テストのカバレッジ集計から外す」
+                # という印。画面表示専用の分岐は、自動テストで細かく追いにくいため。
                 # pragma: no cover - UI surface
                 run_error = f"実行に失敗しました: {exc}"
 

@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-tests/test_excel_export.py: excel_export.py のテスト
+tests/test_excel_export.py: excel_export.py の単体テスト
+
+このファイルでは、「Excel ファイルが作れるか」だけでなく、
+作られた中身が最低限正しいかも確認する。
+見た目の細かい装飾を全部テストするのではなく、
+壊れると困るポイントに絞るのが読みやすいテストのコツ。
 """
 
 from __future__ import annotations
@@ -14,6 +19,11 @@ from expense_core import ExpenseRowNorm, IssueRow, SummaryRow, WarningRow
 
 
 def _sample_errors() -> list[IssueRow]:
+    """Errors シート用の最小データ。
+
+    テストでは「本物そっくりの大量データ」より、
+    意図がすぐ分かる小さいデータのほうが読みやすい。
+    """
     return [
         {
             "row": "2",
@@ -27,6 +37,7 @@ def _sample_errors() -> list[IssueRow]:
 
 
 def _sample_warnings() -> list[WarningRow]:
+    """Warnings シート用の最小データ。"""
     return [
         {
             "kind": "category_unknown",
@@ -42,6 +53,10 @@ def _sample_warnings() -> list[WarningRow]:
 
 
 def _sample_clean() -> list[ExpenseRowNorm]:
+    """Clean シート用の正常データ。
+
+    `ExpenseRowNorm` は「正規化後の行」なので、amount は文字列ではなく整数。
+    """
     return [
         {
             "row": "4",
@@ -61,6 +76,11 @@ def _sample_clean() -> list[ExpenseRowNorm]:
 
 
 def _sample_summary() -> list[SummaryRow]:
+    """Summary / Charts シート用の最小データ。
+
+    グラフ生成は summary の中身に依存するので、
+    Excel 出力テストでも summary を少しだけ用意しておく。
+    """
     return [
         {"type": "month_total", "key": "month", "value": "total_amount"},
         {"type": "month_total", "key": "2026-01", "value": "1200"},
@@ -74,7 +94,10 @@ def _sample_summary() -> list[SummaryRow]:
 
 
 class TestWriteXlsxReport:
+    """write_xlsx_report() の振る舞いを確認するテスト群。"""
+
     def test_creates_file(self, tmp_path: Path) -> None:
+        """関数を呼ぶと .xlsx ファイルが実際に作られるか。"""
         xlsx = tmp_path / "report.xlsx"
         write_xlsx_report(
             path=xlsx,
@@ -86,6 +109,10 @@ class TestWriteXlsxReport:
         assert xlsx.exists()
 
     def test_sheet_names(self, tmp_path: Path) -> None:
+        """必要なシート名がそろっているか。
+
+        ここが崩れると、出力仕様が変わったことにすぐ気づける。
+        """
         xlsx = tmp_path / "report.xlsx"
         write_xlsx_report(
             path=xlsx,
@@ -104,6 +131,7 @@ class TestWriteXlsxReport:
         }
 
     def test_errors_sheet_has_header_and_row(self, tmp_path: Path) -> None:
+        """Errors シートにヘッダと 1 行分のデータが入るか。"""
         xlsx = tmp_path / "report.xlsx"
         write_xlsx_report(
             path=xlsx,
@@ -117,6 +145,7 @@ class TestWriteXlsxReport:
         assert ws.cell(row=1, column=1).value == "row"
 
     def test_clean_sheet_row_count(self, tmp_path: Path) -> None:
+        """Clean シートの行数が、ヘッダ 1 行 + データ件数になるか。"""
         xlsx = tmp_path / "report.xlsx"
         write_xlsx_report(
             path=xlsx,
@@ -129,6 +158,10 @@ class TestWriteXlsxReport:
         assert ws.max_row == 3
 
     def test_header_is_bold(self, tmp_path: Path) -> None:
+        """ヘッダが太字か。
+
+        見た目の全部は追わないが、最低限の読みやすさが保たれているかは確認する。
+        """
         xlsx = tmp_path / "report.xlsx"
         write_xlsx_report(
             path=xlsx,
@@ -141,6 +174,11 @@ class TestWriteXlsxReport:
         assert ws.cell(row=1, column=1).font.bold is True
 
     def test_creates_parent_directory(self, tmp_path: Path) -> None:
+        """親フォルダがなくても保存できるか。
+
+        利用者は毎回フォルダを手で作るとは限らないので、
+        出力側で自動作成できることを守る。
+        """
         xlsx = tmp_path / "nested" / "dir" / "report.xlsx"
         write_xlsx_report(
             path=xlsx,
@@ -152,6 +190,7 @@ class TestWriteXlsxReport:
         assert xlsx.exists()
 
     def test_empty_data_still_creates_charts_sheet(self, tmp_path: Path) -> None:
+        """データ 0 件でもファイル全体の形が壊れないか。"""
         xlsx = tmp_path / "empty.xlsx"
         write_xlsx_report(
             path=xlsx,
