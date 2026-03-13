@@ -9,6 +9,11 @@ tests/test_expense_core.py: expense_core.py の単体テスト
   3. 集計
   4. CSV 入出力
 の 4 つに分けて読むと、全体像をつかみやすい。
+
+補足:
+  テストデータにも `ExpenseRow` や `ExpenseRowNorm` の型注釈を付けている。
+  これは実行のためというより、「本番コードが期待する形と同じか」を
+  型チェックツールにも確認してもらうための目印になる。
 """
 
 from __future__ import annotations
@@ -216,6 +221,8 @@ class TestNormalizeOkRows:
 
     def test_amount_becomes_int(self) -> None:
         """amount が文字列から int に変わるか。"""
+        # ExpenseRow は「入力チェック後だが、まだ amount は文字列」の形。
+        # テスト側でもこの型を使うと、関数に渡す前提が読みやすくなる。
         ok_rows: list[ExpenseRow] = [
             {
                 "row": "2",
@@ -255,6 +262,8 @@ class TestMakeSummary:
 
     def test_month_total_is_aggregated(self) -> None:
         """月別合計が正しく集計されるか。"""
+        # make_summary() は「正規化ずみの行」を受け取る関数なので、
+        # ここでは ExpenseRowNorm を使って amount を整数でそろえておく。
         rows: list[ExpenseRowNorm] = [
             {
                 "row": "2",
@@ -363,6 +372,8 @@ class TestMakeSummary:
 
     def test_empty_rows_only_emit_count(self) -> None:
         """データが 0 件でも count は出て、平均などは出ないか。"""
+        # 空リストは中身がないので、何の型のリストかを mypy だけでは判断しにくい。
+        # 先に型を書いておくと、「集計対象の空データ」だと明確に伝えられる。
         empty_rows: list[ExpenseRowNorm] = []
         summary = make_summary(empty_rows, top_n=10)
         stats = {row["key"]: row["value"] for row in summary if row["type"] == "stats"}

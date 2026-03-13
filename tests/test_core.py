@@ -3,6 +3,11 @@
 tests/test_core.py — expense_core.py の単体テスト
 pytest で実行する。各関数が「正常値・異常値」を正しく判定するかを確認する。
 テスト自体が「この関数をどう使うか」の短い例にもなっている。
+
+補足:
+  pytest のテスト関数は `-> None` を省略しても動くが、
+  型チェックツールに「この関数は値を返さない」と伝えるために明示している。
+  これにより、テストコードも本体コードと同じ基準で型の確認ができる。
 """
 
 from expense_core import check_rows, make_summary, normalize_ok_rows, parse_amount, parse_date
@@ -37,6 +42,8 @@ def test_check_rows_and_summary() -> None:
     assert len(ok) == 1      # 正常行は 1 件
     assert len(errors) == 1  # エラー行は 1 件
 
+    # check_rows() の OK 側は、まだ amount が文字列のまま。
+    # 先に normalize_ok_rows() を通すことで、集計しやすい「整数入りデータ」にそろえる。
     ok_norm = normalize_ok_rows(ok)
     summary = make_summary(ok_norm, top_n=10)
     # month_total の行が 1 件以上含まれているか（集計が動いているか）

@@ -6,6 +6,7 @@
 
 ## 未リリース
 
+- `tests/test_core.py` と `tests/test_expense_core.py` に戻り値型とテストデータの型注釈を追加し、`normalize_ok_rows()` と `make_summary()` まわりで発生していた `mypy` エラーを解消した。ローカルでは `python -m ruff check .` と Python ファイル対象の `mypy` 実行で確認を実施。
 - `excel_export.py`、`tests/test_expense_tool.py`、`tests/test_html_report.py`、`tests/test_rules.py` の import ブロックを `ruff` の期待する形式に揃えて `I001` を解消し、あわせて import の並び順の意図が追いやすいよう先頭付近の学習用コメントを整えた。ローカルでは `python -m ruff check .` と `python -m py_compile` で確認を実施。
 - 今後の実装予定を管理するために `ROADMAP.md` を追加。
 - 経費処理パイプライン全体で発生していた `mypy` の型不一致により、CI が失敗していた問題を修正。
