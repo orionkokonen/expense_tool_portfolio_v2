@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-tests/test_rules.py — rules.py の単体テスト
+tests/test_rules.py — ルール読み込みと判定処理のテスト。
 
-検証のポイント:
-  - load_rules: rules.json の読み込みとデフォルト値の適用
-  - apply_rules: カテゴリ・禁止ワード・日付範囲・金額上限の各ルールが正しく動くか
+ここで見ていること:
+  - rules.json を正しく読み込めるか
+  - カテゴリ、禁止ワード、日付範囲、金額上限の各ルールが効くか
 
-テスト設計の考え方:
-  rules.py は「設定ファイルの内容に応じて振る舞いが変わる」モジュールなので、
-  モードごと（warn / ignore / fallback）に分けてテストする。
-  dataclass（frozen=True）を直接インスタンス化してテストに使うと、
-  JSON ファイルの読み書きを省略でき、テストが速く単純になる。
+考え方:
+  rules.py は設定しだいで動きが変わるので、
+  warn / ignore / fallback のように分岐ごとに分けて確認する。
+  また、必要に応じて dataclass を直接作ると、
+  ファイル準備を減らせてテストの意図が追いやすくなる。
 """
 from __future__ import annotations
 
@@ -38,7 +38,8 @@ def _write_rules(tmp_path: Path, data: dict) -> Path:
 
     tmp_path（pytest 提供の一時フォルダ）に書くので、
     テスト後に自動で片付けられる。
-    本物の rules.json を触らないため、安全に試せる。
+    本物の rules.json を触らないので、
+    手元の設定を壊さず安全に試せる。
     """
     p = tmp_path / "rules.json"
     p.write_text(json.dumps(data), encoding="utf-8")
@@ -52,11 +53,13 @@ def _row(
     category: str = "交通費",
     row: str = "2",
 ) -> ExpenseRowNorm:
-    """テスト用の正規化済み行を作る。
+    """テスト用の「整形ずみデータ」を作る。
 
     デフォルト引数を設定しておくと、テストケースごとに
     変えたい項目だけ指定すればよくなり、記述量が減る。
-    例: _row(category="食費") → 他はデフォルト値
+    ここでいう「整形ずみ」は、型や項目名が
+    rules.py が受け取りやすい形にそろっている状態のこと。
+    例: _row(category="食費") と書けば、他は共通の初期値を使える。
     """
     return {
         "row": row,

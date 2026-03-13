@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-tests/test_html_report.py — html_report.py の単体テスト
+tests/test_html_report.py — HTML レポート生成のテスト。
 
-検証のポイント:
-  - _safe_json_dumps: XSS 攻撃に使われる文字列が無害化されるか
-  - table_html: HTML テーブルの生成と XSS 対策
-  - write_html_report: ファイル生成・タイトル・CDN フォールバック
+ここで見ていること:
+  - JSON を HTML に埋め込むときに危険な文字列をそのまま出さないか
+  - 表の HTML が正しく組み立てられるか
+  - レポート用ファイルが必要な内容つきで出力されるか
 
-テストの命名規則:
-  test_<何を>_<どうなるか> の形で書くと、失敗時に原因が読みやすい。
+特に大事な点:
+  XSS は「悪意ある文字列がブラウザで実行されてしまう問題」。
+  画面表示のテストに見えても、安全性を守る確認として重要になる。
 """
 from __future__ import annotations
 
@@ -31,8 +32,9 @@ def _sample_summary() -> list[SummaryRow]:
     """テスト用の最小限の summary データを返す。
 
     実際の make_summary() が返す形式に合わせて、
-    ヘッダ行（key="month"）+ データ行（key="2026-01"）のペアを作る。
-    本番の全パターンを持ち込まず、必要最小限にすると意図が読みやすい。
+    見出し行（key="month"）とデータ行（key="2026-01"）のペアを作る。
+    本番に近い形は保ちつつ、量は最小限にして
+    「何を試したいテストか」が埋もれないようにしている。
     """
     return [
         {"type": "month_total", "key": "month", "value": "total_amount"},
@@ -48,7 +50,7 @@ def _sample_summary() -> list[SummaryRow]:
 # ---------------------------------------------------------------------------
 
 class TestSafeJsonDumps:
-    """JSON 埋め込みの安全性テスト。"""
+    """JSON を安全に埋め込めるかを見るテスト。"""
 
     def test_basic_list(self) -> None:
         """通常のリストがそのまま JSON 文字列になるか。"""

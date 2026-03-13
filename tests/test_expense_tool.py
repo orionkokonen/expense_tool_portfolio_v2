@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-tests/test_expense_tool.py — expense_tool.py (CLI) の単体テスト
+tests/test_expense_tool.py — CLI まわりの動きを確かめるテスト。
 
-検証のポイント:
-  - CLI パーサーがサブコマンドや引数を正しく受け取るか
-  - main() 関数が CSV を処理して期待する出力ファイルを生成するか
-  - 終了コード（0=正常, 2=エラーあり）が正しいか
+ここで見ていること:
+  - コマンドとオプションを正しく読み取れるか
+  - CSV を渡したときに、期待した出力ファイルが作られるか
+  - 成功と失敗が、終了コードに正しく反映されるか
 
-テスト設計の考え方:
-  CLI テストでは「画面に表示される文字列」ではなく
-  「終了コード」と「生成されたファイル」で正否を判定する。
-  こうすると表示文言を変えてもテストが壊れにくい。
+考え方:
+  CLI テストでは、表示メッセージの細かい文言より
+  「何が作られたか」「成功扱いか失敗扱いか」を見るほうが安定する。
+  そのため、このファイルでは終了コードと出力ファイルを中心に確認する。
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
     """テスト用の CSV を書き出す。
 
     テストごとに異なる内容の CSV が必要なので、
-    ヘルパー関数にして使い回す。
+    毎回ベタ書きせず、ヘルパー関数にして使い回す。
     こうしておくと、テスト本文は「何を確かめたいか」に集中しやすい。
     """
     fieldnames = ["date", "amount", "merchant", "category"]
@@ -40,7 +40,7 @@ def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
 
 
 def _good_rows() -> list[dict[str, str]]:
-    """エラーなしの正常データ。"""
+    """正常系の確認に使う、ルール違反のない行データ。"""
     return [
         {"date": "2026-01-10", "amount": "1200", "merchant": "カフェA", "category": "会議費"},
         {"date": "2026-01-15", "amount": "3500", "merchant": "ホテルB", "category": "旅費"},
@@ -48,7 +48,11 @@ def _good_rows() -> list[dict[str, str]]:
 
 
 def _bad_rows() -> list[dict[str, str]]:
-    """日付形式違い + 金額が文字列 → エラーになるデータ。"""
+    """入力エラーを起こすための行データ。
+
+    日付形式の違いと金額の不正値を入れて、
+    「異常な入力をきちんと弾けるか」を確かめる。
+    """
     return [
         {"date": "2026/01/10", "amount": "abc", "merchant": "", "category": ""},
     ]
@@ -62,7 +66,8 @@ def _bad_rows() -> list[dict[str, str]]:
 class TestBuildParser:
     """CLI パーサーのテスト。
 
-    parse_args にリストを渡すと、コマンドラインから打ったのと同じ動きをする。
+    parse_args に文字列のリストを渡すと、
+    実際にターミナルでコマンドを打ったのに近い形で確認できる。
     """
 
     def test_check_command(self) -> None:

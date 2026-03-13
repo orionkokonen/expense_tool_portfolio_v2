@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-excel_export.py — Excel レポートの生成
-シート: Errors / Warnings / Clean / Summary / Charts
-見栄え: ヘッダ太字 / 先頭行固定 / オートフィルタ / 列幅自動調整
-グラフ: 月別推移（棒グラフ）/ カテゴリ比率（円グラフ）
+excel_export.py — 集計結果から Excel レポートを作る。
+
+このファイルの役割:
+  - エラー行、警告行、正常行をシートごとに分けて見やすくする
+  - 集計結果を表として残し、あとで確認しやすくする
+  - 数字だけでは追いにくい変化を、グラフで直感的に見られるようにする
+
+主なシート:
+  - Errors / Warnings / Clean / Summary / Charts
 """
 from __future__ import annotations
 
@@ -15,9 +20,9 @@ from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
-# Worksheet の型を import しておくと、関数の引数に「ws: Worksheet」と書ける。
-# 型ヒント（型注釈）= 「この引数にはこの型が来る」と明示する仕組み。
-# mypy（型チェックツール）がミスを見つけやすくなり、エディタの補完も効くようになる。
+# Worksheet 型を明示しておくと、「この関数は Excel のシートを受け取る」と伝えやすい。
+# 型ヒントは、実行時の動きを変えるものではなく、読み手とツール向けの説明。
+# そのおかげで、補完が効いたり、別の型を渡すミスに気づきやすくなったりする。
 from openpyxl.worksheet.worksheet import Worksheet
 
 from expense_core import SummaryRow
@@ -31,7 +36,7 @@ def write_xlsx_report(
     clean: Sequence[Mapping[str, object]],
     summary: Sequence[SummaryRow],
 ) -> None:
-    """Excel レポートを生成して指定パスに保存する。
+    """Excel レポートを組み立てて、指定した場所に保存する。
 
     シート構成:
       - Errors   : 入力チェックでエラーになった行
@@ -40,9 +45,9 @@ def write_xlsx_report(
       - Summary  : 集計結果
       - Charts   : グラフ（月別・カテゴリ別）
 
-    出力先フォルダが存在しない場合は自動で作成する。
-    Render のようなクラウド環境ではデプロイ時にフォルダがない場合があるため、
-    mkdir を明示的に呼んでいる。
+    保存先のフォルダがまだ無い場合は、先に作ってから保存する。
+    これを入れておくと、初回実行時やクラウド環境でも
+    「フォルダが無いので保存できない」という失敗を防げる。
     """
     wb = Workbook()
 
