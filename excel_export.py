@@ -28,6 +28,8 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from expense_core import SummaryRow
 
+# import は「標準機能 → 外部ライブラリ → このプロジェクト内のコード」の順にそろえる。
+# こうしておくと、どこから来た名前か追いやすくなり、整形ツールでも同じ形を保ちやすい。
 
 def write_xlsx_report(
     *,
