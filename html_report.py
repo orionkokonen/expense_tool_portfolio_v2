@@ -14,6 +14,19 @@ from pathlib import Path
 
 from expense_core import SummaryRow
 
+# テーブルに表示する最大行数。HTML が重くなりすぎないよう制限する。
+# 全データは CSV ダウンロードから参照できる。
+MAX_TABLE_ROWS = 200
+
+
+def _safe_json_dumps(data: list[str] | list[int]) -> str:
+    """JavaScript に埋め込むデータを安全に JSON 化する。
+
+    json.dumps で基本的なエスケープは行われるが、
+    HTML の </script> タグ注入を防ぐため追加で置換する。
+    """
+    return json.dumps(data, ensure_ascii=True).replace("</", r"<\/")
+
 
 def write_html_report(
     *,
@@ -52,11 +65,9 @@ def write_html_report(
     cat_labels = [c for c, _ in cat_rows]
     cat_values = [v for _, v in cat_rows]
 
-    # HTML が重くなりすぎないよう先頭 200 件に制限する。
-    # 全データは CSV ダウンロードから参照できる。
-    errors_head = errors[:200]
-    warnings_head = warnings[:200]
-    clean_head = clean[:200]
+    errors_head = errors[:MAX_TABLE_ROWS]
+    warnings_head = warnings[:MAX_TABLE_ROWS]
+    clean_head = clean[:MAX_TABLE_ROWS]
 
     html = f"""<!doctype html>
 <html lang="ja">
@@ -95,56 +106,65 @@ def write_html_report(
   </div>
 
   <div class="card" style="margin-top:16px;">
-    <h2>Errors（先頭200件）</h2>
+    <h2>Errors（先頭{MAX_TABLE_ROWS}件）</h2>
     {table_html(errors_head, ["row", "date", "amount", "merchant", "category", "reason"])}
   </div>
 
   <div class="card" style="margin-top:16px;">
-    <h2>Warnings（先頭200件）</h2>
+    <h2>Warnings（先頭{MAX_TABLE_ROWS}件）</h2>
     {table_html(warnings_head, ["kind", "row", "date", "month", "category", "merchant", "amount",
                                 "message"])}
   </div>
 
   <div class="card" style="margin-top:16px;">
-    <h2>Clean（先頭200件）</h2>
+    <h2>Clean（先頭{MAX_TABLE_ROWS}件）</h2>
     {table_html(clean_head, ["date", "amount", "merchant", "category"])}
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    // Python 側で json.dumps() したデータを JavaScript 変数として埋め込む。
-    // サーバーへの追加リクエストなしにグラフを描画できる。
-    const monthLabels = {json.dumps(month_labels)};
-    const monthValues = {json.dumps(month_values)};
-    const catLabels = {json.dumps(cat_labels)};
-    const catValues = {json.dumps(cat_values)};
+    // Chart.js の CDN 読み込みに失敗した場合のフォールバック。
+    // オフライン環境でもテーブルは閲覧できるよう、グラフ欄にメッセージを出す。
+    if (typeof Chart === 'undefined') {{
+      document.getElementById('chartMonth').parentElement.innerHTML +=
+        '<p style="color:#999">グラフの表示には外部ライブラリ (Chart.js) が必要です。'
+        + 'オフライン環境では表示できません。</p>';
+      document.getElementById('chartCat').parentElement.innerHTML +=
+        '<p style="color:#999">グラフの表示には外部ライブラリ (Chart.js) が必要です。</p>';
+    }} else {{
+      // Python 側で安全に JSON 化したデータを JavaScript 変数として埋め込む。
+      const monthLabels = {_safe_json_dumps(month_labels)};
+      const monthValues = {_safe_json_dumps(month_values)};
+      const catLabels = {_safe_json_dumps(cat_labels)};
+      const catValues = {_safe_json_dumps(cat_values)};
 
-    const ctxM = document.getElementById('chartMonth');
-    new Chart(ctxM, {{
-      type: 'bar',
-      data: {{
-        labels: monthLabels,
-        datasets: [{{ label: 'total', data: monthValues }}]
-      }},
-      options: {{
-        responsive: true,
-        plugins: {{
-          legend: {{ display: true }}
+      const ctxM = document.getElementById('chartMonth');
+      new Chart(ctxM, {{
+        type: 'bar',
+        data: {{
+          labels: monthLabels,
+          datasets: [{{ label: 'total', data: monthValues }}]
+        }},
+        options: {{
+          responsive: true,
+          plugins: {{
+            legend: {{ display: true }}
+          }}
         }}
-      }}
-    }});
+      }});
 
-    const ctxC = document.getElementById('chartCat');
-    new Chart(ctxC, {{
-      type: 'pie',
-      data: {{
-        labels: catLabels,
-        datasets: [{{ data: catValues }}]
-      }},
-      options: {{
-        responsive: true
-      }}
-    }});
+      const ctxC = document.getElementById('chartCat');
+      new Chart(ctxC, {{
+        type: 'pie',
+        data: {{
+          labels: catLabels,
+          datasets: [{{ data: catValues }}]
+        }},
+        options: {{
+          responsive: true
+        }}
+      }});
+    }}
   </script>
 </body>
 </html>

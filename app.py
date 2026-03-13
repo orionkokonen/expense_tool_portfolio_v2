@@ -7,6 +7,7 @@ CLI と同じ処理パイプラインをボタン操作でたどれるように�
 
 from __future__ import annotations
 
+import json
 import tempfile
 from collections import Counter
 from html import escape
@@ -1055,13 +1056,28 @@ def main() -> None:
 
     run_error: str | None = None
 
+    # パストラバーサル対策: 入力パスがプロジェクトディレクトリの外に出ないことを確認する。
+    _project_root = Path.cwd().resolve()
+
+    def _safe_resolve(raw: str) -> Path | None:
+        """パスを解決し、プロジェクトルート配下であることを検証する。"""
+        try:
+            resolved = (Path.cwd() / raw).resolve()
+        except (OSError, ValueError):
+            return None
+        if not str(resolved).startswith(str(_project_root)):
+            return None
+        return resolved
+
     # どのボタンから実行しても、ここから先は同じパイプラインに流す。
     if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
-        rules_path = Path(rules_path_str)
-        out_dir = Path(out_dir_str)
+        rules_path = _safe_resolve(rules_path_str)
+        out_dir = _safe_resolve(out_dir_str)
         result: dict[str, Any] | None = None
 
-        if not rules_path.exists():
+        if rules_path is None or out_dir is None:
+            run_error = "パスがプロジェクトディレクトリの外を指しています。安全のためブロックしました。"
+        elif not rules_path.exists():
             run_error = f"rules.json が見つかりません: {rules_path}"
         else:
             try:
@@ -1100,7 +1116,7 @@ def main() -> None:
                         if result is not None:
                             result["source_path"] = str(sample_csv_path.resolve())
                             result["source_bytes"] = _read_bytes(sample_csv_path)
-            except Exception as exc:  # pragma: no cover - UI surface
+            except (ValueError, FileNotFoundError, PermissionError, UnicodeDecodeError, json.JSONDecodeError, OSError) as exc:  # pragma: no cover - UI surface
                 run_error = f"実行に失敗しました: {exc}"
 
         if result is not None:

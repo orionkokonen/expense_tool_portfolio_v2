@@ -142,24 +142,24 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
             if col not in r:
                 reasons.append(f"列がない: {col}")
                 continue
-            text = r.get(col) or ""
+            text = r.get(col, "")
             if text.strip() == "":
                 reasons.append(f"空欄: {col}")
 
         # 日付チェック（空欄は上で検出済み。ここは「空欄ではないが形式が違う」ケース）
-        d = (r.get("date") or "").strip()
+        d = r.get("date", "").strip()
         if d and not parse_date(d):
             reasons.append("日付の形式が違う（YYYY-MM-DD）")
 
         # 金額チェック
-        a = (r.get("amount") or "").strip()
+        a = r.get("amount", "").strip()
         if a and not parse_amount(a):
             reasons.append("金額が数字じゃない")
 
         # 重複チェック: merchant を小文字に統一して大文字・小文字の表記揺れを吸収する
-        date_k = (r.get("date") or "").strip()
-        amount_k = (r.get("amount") or "").strip()
-        merchant_k = (r.get("merchant") or "").strip().lower()
+        date_k = r.get("date", "").strip()
+        amount_k = r.get("amount", "").strip()
+        merchant_k = r.get("merchant", "").strip().lower()
 
         if date_k and amount_k and merchant_k:
             key = (date_k, amount_k, merchant_k)

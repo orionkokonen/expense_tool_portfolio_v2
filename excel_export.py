@@ -16,6 +16,7 @@ from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 
 from expense_core import SummaryRow
 
@@ -97,7 +98,7 @@ def _add_table_sheet(
     _auto_width(ws, max_width=50)
 
 
-def _auto_width(ws, max_width: int = 60) -> None:
+def _auto_width(ws: Worksheet, max_width: int = 60) -> None:
     """各列の最大文字数に応じて列幅を自動調整する。
 
     openpyxl はデフォルトで列幅を調整しないため、手動で計算して設定する。
@@ -116,7 +117,7 @@ def _auto_width(ws, max_width: int = 60) -> None:
         ws.column_dimensions[letter].width = min(max_len + 2, max_width)
 
 
-def _build_charts(ws, summary: Sequence[SummaryRow]) -> None:
+def _build_charts(ws: Worksheet, summary: Sequence[SummaryRow]) -> None:
     """Charts シートに月別棒グラフとカテゴリ別円グラフを作る。
 
     summary のフラットリストから type でフィルタしてグラフ用データを抽出し、

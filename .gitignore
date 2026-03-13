@@ -35,3 +35,8 @@ pytest-cache-files-*/
 
 # 一時ファイル
 .tmp/
+
+# 環境変数・シークレット（誤コミット防止）
+.env
+.env.*
+*.env

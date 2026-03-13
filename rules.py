@@ -93,7 +93,7 @@ def _valid_date(s: str) -> bool:
     try:
         datetime.strptime(s, "%Y-%m-%d")
         return True
-    except Exception:
+    except (ValueError, TypeError):
         return False
 
 

@@ -24,6 +24,6 @@ python_version = "3.10"
 # いきなり厳しすぎる設定にせず、学習しながら段階的に有効化している。
 warn_return_any = true
 warn_unused_ignores = true
-disallow_untyped_defs = false
+disallow_untyped_defs = true
 check_untyped_defs = true
 ignore_missing_imports = true
