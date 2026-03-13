@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 
 from expense_core import (
+    ExpenseRow,
+    ExpenseRowNorm,
     check_rows,
     make_summary,
     normalize_ok_rows,
@@ -214,7 +216,7 @@ class TestNormalizeOkRows:
 
     def test_amount_becomes_int(self) -> None:
         """amount が文字列から int に変わるか。"""
-        ok_rows = [
+        ok_rows: list[ExpenseRow] = [
             {
                 "row": "2",
                 "date": "2026-01-10",
@@ -229,7 +231,7 @@ class TestNormalizeOkRows:
 
     def test_whitespace_is_stripped(self) -> None:
         """前後の空白を除去してから正規化するか。"""
-        ok_rows = [
+        ok_rows: list[ExpenseRow] = [
             {
                 "row": "2",
                 "date": " 2026-01-10 ",
@@ -253,7 +255,7 @@ class TestMakeSummary:
 
     def test_month_total_is_aggregated(self) -> None:
         """月別合計が正しく集計されるか。"""
-        rows = [
+        rows: list[ExpenseRowNorm] = [
             {
                 "row": "2",
                 "date": "2026-01-10",
@@ -288,7 +290,7 @@ class TestMakeSummary:
 
     def test_category_total_is_aggregated(self) -> None:
         """カテゴリ別合計が正しく集計されるか。"""
-        rows = [
+        rows: list[ExpenseRowNorm] = [
             {
                 "row": "2",
                 "date": "2026-01-10",
@@ -315,7 +317,7 @@ class TestMakeSummary:
 
     def test_merchant_top_is_limited_by_top_n(self) -> None:
         """top_n の件数だけ支出先が残るか。"""
-        rows = [
+        rows: list[ExpenseRowNorm] = [
             {
                 "row": str(i),
                 "date": "2026-01-10",
@@ -335,7 +337,7 @@ class TestMakeSummary:
 
     def test_stats_are_generated(self) -> None:
         """count / min / max / average / median が出るか。"""
-        rows = [
+        rows: list[ExpenseRowNorm] = [
             {
                 "row": "2",
                 "date": "2026-01-10",
@@ -361,7 +363,8 @@ class TestMakeSummary:
 
     def test_empty_rows_only_emit_count(self) -> None:
         """データが 0 件でも count は出て、平均などは出ないか。"""
-        summary = make_summary([], top_n=10)
+        empty_rows: list[ExpenseRowNorm] = []
+        summary = make_summary(empty_rows, top_n=10)
         stats = {row["key"]: row["value"] for row in summary if row["type"] == "stats"}
         assert stats["count"] == "0"
         assert "average" not in stats
