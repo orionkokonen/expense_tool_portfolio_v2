@@ -20,6 +20,7 @@ from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
+
 # Worksheet 型を明示しておくと、「この関数は Excel のシートを受け取る」と伝えやすい。
 # 型ヒントは、実行時の動きを変えるものではなく、読み手とツール向けの説明。
 # そのおかげで、補完が効いたり、別の型を渡すミスに気づきやすくなったりする。
