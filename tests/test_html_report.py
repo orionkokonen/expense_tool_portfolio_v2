@@ -10,7 +10,6 @@ tests/test_html_report.py — html_report.py の単体テスト
 テストの命名規則:
   test_<何を>_<どうなるか> の形で書くと、失敗時に原因が読みやすい。
 """
-
 from __future__ import annotations
 
 from pathlib import Path

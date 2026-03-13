@@ -12,7 +12,6 @@ tests/test_rules.py — rules.py の単体テスト
   dataclass（frozen=True）を直接インスタンス化してテストに使うと、
   JSON ファイルの読み書きを省略でき、テストが速く単純になる。
 """
-
 from __future__ import annotations
 
 import json

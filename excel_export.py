@@ -5,7 +5,6 @@ excel_export.py — Excel レポートの生成
 見栄え: ヘッダ太字 / 先頭行固定 / オートフィルタ / 列幅自動調整
 グラフ: 月別推移（棒グラフ）/ カテゴリ比率（円グラフ）
 """
-
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence

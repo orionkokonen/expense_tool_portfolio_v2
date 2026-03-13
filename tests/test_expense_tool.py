@@ -12,7 +12,6 @@ tests/test_expense_tool.py — expense_tool.py (CLI) の単体テスト
   「終了コード」と「生成されたファイル」で正否を判定する。
   こうすると表示文言を変えてもテストが壊れにくい。
 """
-
 from __future__ import annotations
 
 import csv
