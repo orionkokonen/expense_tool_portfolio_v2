@@ -93,6 +93,9 @@ def _valid_date(s: str) -> bool:
     try:
         datetime.strptime(s, "%Y-%m-%d")
         return True
+    # ValueError: "abc" のように日付として解釈できない文字列
+    # TypeError : None が渡された場合（strptime は str しか受け付けない）
+    # この 2 つだけをキャッチし、それ以外の想定外エラーは見逃さないようにする。
     except (ValueError, TypeError):
         return False
 

@@ -14,16 +14,26 @@ from pathlib import Path
 
 from expense_core import SummaryRow
 
-# テーブルに表示する最大行数。HTML が重くなりすぎないよう制限する。
-# 全データは CSV ダウンロードから参照できる。
+# ── 定数: テーブルの最大行数 ──
+# 数千行を一度にテーブルへ入れるとブラウザが重くなるため、
+# 表示は先頭 N 件に限定する。全件は CSV ダウンロードで確認できる。
+# 「200」をコード中に直書き（マジックナンバー）すると変更時に探す手間がかかるので、
+# 名前付き定数に切り出して一箇所で管理する。
 MAX_TABLE_ROWS = 200
 
 
 def _safe_json_dumps(data: list[str] | list[int]) -> str:
-    """JavaScript に埋め込むデータを安全に JSON 化する。
+    """Python のリストを、HTML 内の <script> タグに安全に埋め込める JSON 文字列に変換する。
 
-    json.dumps で基本的なエスケープは行われるが、
-    HTML の </script> タグ注入を防ぐため追加で置換する。
+    なぜ必要か:
+      json.dumps だけだと、データに "</script>" という文字列が含まれていた場合、
+      ブラウザが「ここで script タグが終わった」と誤認し、
+      残りの文字列が HTML として実行されてしまう（XSS = クロスサイトスクリプティング攻撃）。
+
+    対策:
+      - ensure_ascii=True → 日本語などを \\uXXXX 形式に変換し、HTML 特殊文字を避ける
+      - .replace("</", "<\\/") → "</script>" を "<\\/script>" にして、
+        ブラウザが script 終了タグと誤認しないようにする
     """
     return json.dumps(data, ensure_ascii=True).replace("</", r"<\/")
 
@@ -121,10 +131,15 @@ def write_html_report(
     {table_html(clean_head, ["date", "amount", "merchant", "category"])}
   </div>
 
+  <!-- Chart.js を CDN（外部サーバー）から読み込む。
+       CDN = Content Delivery Network。ライブラリを自分のサーバーに置かずに済むが、
+       ネットワークが使えない環境では読み込めない欠点がある。 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    // Chart.js の CDN 読み込みに失敗した場合のフォールバック。
-    // オフライン環境でもテーブルは閲覧できるよう、グラフ欄にメッセージを出す。
+    // ── CDN フォールバック（読み込み失敗時の代替処理）──
+    // オフライン環境や CDN 障害時にグラフが表示できなくても、
+    // テーブル部分は問題なく見られるようにメッセージで案内する。
+    // typeof で存在チェックすると、未定義でもエラーにならない。
     if (typeof Chart === 'undefined') {{
       document.getElementById('chartMonth').parentElement.innerHTML +=
         '<p style="color:#999">グラフの表示には外部ライブラリ (Chart.js) が必要です。'
@@ -132,7 +147,11 @@ def write_html_report(
       document.getElementById('chartCat').parentElement.innerHTML +=
         '<p style="color:#999">グラフの表示には外部ライブラリ (Chart.js) が必要です。</p>';
     }} else {{
-      // Python 側で安全に JSON 化したデータを JavaScript 変数として埋め込む。
+      // ── Python → JavaScript へのデータ受け渡し ──
+      // Python の f-string でこの HTML を組み立てるとき、
+      // _safe_json_dumps() の戻り値がここに直接埋め込まれる。
+      // 例: const monthLabels = ["2026-01", "2026-02"];
+      // XSS 対策済みの JSON なので、悪意ある文字列が混入しても安全。
       const monthLabels = {_safe_json_dumps(month_labels)};
       const monthValues = {_safe_json_dumps(month_values)};
       const catLabels = {_safe_json_dumps(cat_labels)};
@@ -175,10 +194,12 @@ def write_html_report(
 
 
 def table_html(rows: Sequence[Mapping[str, object]], columns: Sequence[str]) -> str:
-    """辞書のリストを HTML テーブルに変換する。
+    """辞書のリストを HTML の <table> に変換する。
 
-    セル値に escape() を適用することで XSS（クロスサイトスクリプティング）を防ぐ。
-    CSV の内容に "<script>" のような文字列が含まれていても HTML として実行されない。
+    XSS（クロスサイトスクリプティング）対策:
+      CSV の内容をそのまま HTML に埋め込むと、セルに "<script>alert(1)</script>" と
+      書かれていた場合、ブラウザがそれを JavaScript として実行してしまう。
+      escape() を通すと "<" が "&lt;" に変わり、ただの文字として表示される。
     """
     if not rows:
         # 空テーブルより「データなし」と明示した方が、読み手が迷いにくい。

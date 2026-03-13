@@ -1056,16 +1056,30 @@ def main() -> None:
 
     run_error: str | None = None
 
-    # パストラバーサル対策: 入力パスがプロジェクトディレクトリの外に出ないことを確認する。
+    # ── パストラバーサル対策 ──
+    # 「パストラバーサル」= "../../../etc/passwd" のように相対パスで
+    # プロジェクト外のファイルへアクセスさせる攻撃手法。
+    # ユーザーが入力したパスを resolve()（絶対パスに変換）してから
+    # プロジェクトルートの中にあるかを確認し、外部アクセスをブロックする。
     _project_root = Path.cwd().resolve()
 
     def _safe_resolve(raw: str) -> Path | None:
-        """パスを解決し、プロジェクトルート配下であることを検証する。"""
+        """ユーザー入力のパスを安全な絶対パスに変換する。
+
+        仕組み:
+          1. Path.cwd() / raw → 相対パスを現在ディレクトリ基準で結合
+          2. .resolve()       → ".." などを展開し、最終的な絶対パスにする
+          3. startswith チェック → プロジェクト外を指していたら None で拒否
+
+        None を返したらパス不正、呼び出し側でエラーメッセージを表示する。
+        """
         try:
             resolved = (Path.cwd() / raw).resolve()
         except (OSError, ValueError):
+            # パス文字列自体が不正（制御文字を含むなど）の場合
             return None
         if not str(resolved).startswith(str(_project_root)):
+            # プロジェクトルートの外を指している → 拒否
             return None
         return resolved
 
@@ -1116,7 +1130,19 @@ def main() -> None:
                         if result is not None:
                             result["source_path"] = str(sample_csv_path.resolve())
                             result["source_bytes"] = _read_bytes(sample_csv_path)
-            except (ValueError, FileNotFoundError, PermissionError, UnicodeDecodeError, json.JSONDecodeError, OSError) as exc:  # pragma: no cover - UI surface
+            # ── 例外を具体的に列挙してキャッチする ──
+            # except Exception（全例外キャッチ）だと、プログラムのバグまで
+            # 握りつぶしてしまい原因不明の不具合になりやすい。
+            # ここでは「ユーザー操作で起きうるエラー」だけを名前で指定し、
+            # 想定外のバグは通常どおり例外として浮上させる。
+            except (
+                ValueError,          # CSV の形式不正、数値変換失敗など
+                FileNotFoundError,   # ファイルが存在しない
+                PermissionError,     # ファイルの読み書き権限がない
+                UnicodeDecodeError,  # 文字コードが UTF-8 でない
+                json.JSONDecodeError,  # rules.json の JSON 構文エラー
+                OSError,             # ディスク容量不足などの OS レベルのエラー
+            ) as exc:  # pragma: no cover - UI surface
                 run_error = f"実行に失敗しました: {exc}"
 
         if result is not None:

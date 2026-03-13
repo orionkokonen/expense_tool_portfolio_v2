@@ -16,6 +16,9 @@ from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
+# Worksheet の型を import しておくと、関数の引数に「ws: Worksheet」と書ける。
+# 型ヒント（型注釈）= 「この引数にはこの型が来る」と明示する仕組み。
+# mypy（型チェックツール）がミスを見つけやすくなり、エディタの補完も効くようになる。
 from openpyxl.worksheet.worksheet import Worksheet
 
 from expense_core import SummaryRow

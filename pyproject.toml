@@ -24,6 +24,9 @@ python_version = "3.10"
 # いきなり厳しすぎる設定にせず、学習しながら段階的に有効化している。
 warn_return_any = true
 warn_unused_ignores = true
+# disallow_untyped_defs = true にすると、型ヒントが書かれていない関数を
+# mypy がエラーとして報告する。「def foo(x):」→「def foo(x: int) -> str:」のように
+# すべての関数に型を明示する習慣が付き、バグの早期発見につながる。
 disallow_untyped_defs = true
 check_untyped_defs = true
 ignore_missing_imports = true
