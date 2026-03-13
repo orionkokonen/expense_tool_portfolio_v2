@@ -18,8 +18,6 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-import pytest
-
 from expense_tool import build_parser, datetime_now_stamp, main
 
 

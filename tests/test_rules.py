@@ -21,7 +21,13 @@ from pathlib import Path
 import pytest
 
 from expense_core import ExpenseRowNorm
-from rules import DateRange, Limits, Rules, apply_rules, load_rules
+from rules import (
+    DateRange,
+    Limits,
+    Rules,
+    apply_rules,
+    load_rules,
+)
 
 
 # ---------------------------------------------------------------------------

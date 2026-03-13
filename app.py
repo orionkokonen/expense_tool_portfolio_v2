@@ -1090,7 +1090,10 @@ def main() -> None:
         result: dict[str, Any] | None = None
 
         if rules_path is None or out_dir is None:
-            run_error = "パスがプロジェクトディレクトリの外を指しています。安全のためブロックしました。"
+            run_error = (
+                "パスがプロジェクトディレクトリの外を指しています。"
+                "安全のためブロックしました。"
+            )
         elif not rules_path.exists():
             run_error = f"rules.json が見つかりません: {rules_path}"
         else:
@@ -1142,7 +1145,8 @@ def main() -> None:
                 UnicodeDecodeError,  # 文字コードが UTF-8 でない
                 json.JSONDecodeError,  # rules.json の JSON 構文エラー
                 OSError,             # ディスク容量不足などの OS レベルのエラー
-            ) as exc:  # pragma: no cover - UI surface
+            ) as exc:
+                # pragma: no cover - UI surface
                 run_error = f"実行に失敗しました: {exc}"
 
         if result is not None:

@@ -16,7 +16,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from expense_core import SummaryRow
-from html_report import MAX_TABLE_ROWS, _safe_json_dumps, table_html, write_html_report
+from html_report import (
+    MAX_TABLE_ROWS,
+    _safe_json_dumps,
+    table_html,
+    write_html_report,
+)
 
 
 # ---------------------------------------------------------------------------
