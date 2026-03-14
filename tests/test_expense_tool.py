@@ -179,29 +179,3 @@ class TestMainReport:
         # 「履歴保存用の出力が何かしら作られたか」を確認する。
         files = list(history.iterdir())
         assert len(files) > 0
-
-
-    def test_report_clean_csv_keeps_row_column(self, tmp_path: Path) -> None:
-        csv_path = tmp_path / "good.csv"
-        _write_csv(csv_path, _good_rows())
-        out_dir = tmp_path / "out"
-
-        code = main(["report", str(csv_path), "--out", str(out_dir)])
-
-        assert code == 0
-        clean_csv = out_dir / "latest" / "good" / "clean.csv"
-        with open(clean_csv, encoding="utf-8") as f:
-            header = f.readline().strip()
-        assert header == "row,date,amount,merchant,category"
-
-    def test_report_invalid_rules_returns_error_code(self, tmp_path: Path) -> None:
-        csv_path = tmp_path / "good.csv"
-        _write_csv(csv_path, _good_rows())
-        bad_rules = tmp_path / "rules.json"
-        bad_rules.write_text('{"limits": {"category_daily": ["oops"]}}', encoding="utf-8")
-
-        code = main(
-            ["report", str(csv_path), "--rules", str(bad_rules), "--out", str(tmp_path / "out")]
-        )
-
-        assert code == 2

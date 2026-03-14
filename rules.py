@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""rules.py: load and validate rules.json before applying checks."""
+"""
+rules.py — 社内ルールの読み込みと適用
+rules.json を読み込み、入力チェック済みの行に対して「社内ルール違反」を検出する。
+違反は warnings として返し、clean_rows にはカテゴリ書き換え後のデータを入れる。
+「止めるべき問題」と「人が確認する問題」を分けるため、ここは警告中心の設計になっている。
+"""
 
 from __future__ import annotations
 
@@ -10,19 +15,19 @@ from pathlib import Path
 
 from expense_core import ExpenseRowNorm, WarningRow
 
+# --- データクラス（設定値をまとめて管理する構造体）---
+# frozen=True にすることで処理中に値が書き換えられないよう「読み取り専用」にしている
 
 @dataclass(frozen=True)
 class DateRange:
-    """Optional min/max date bounds from rules.json."""
-
-    min: str | None = None
-    max: str | None = None
+    """日付の有効範囲（rules.json の date_range に対応）。"""
+    min: str | None = None  # "YYYY-MM-DD"
+    max: str | None = None  # "YYYY-MM-DD"
 
 
 @dataclass(frozen=True)
 class Limits:
-    """Optional total/category limits from rules.json."""
-
+    """金額の上限設定（rules.json の limits に対応）。"""
     daily_total: int | None = None
     monthly_total: int | None = None
     category_daily: dict[str, int] | None = None
@@ -31,101 +36,42 @@ class Limits:
 
 @dataclass(frozen=True)
 class Rules:
-    """Validated rules.json payload."""
-
+    """rules.json の全設定をまとめたデータクラス。"""
     allowed_categories: list[str] | None = None
-    unknown_category_mode: str = "warn"
+    unknown_category_mode: str = "warn"  # "warn" | "ignore" | "fallback"
     fallback_category: str | None = None
     banned_words: list[str] | None = None
     date_range: DateRange = DateRange()
     limits: Limits = Limits()
 
 
-def _expect_mapping(value: object, name: str) -> dict[object, object]:
-    """Return a mapping value or raise a descriptive ValueError."""
-
-    if not isinstance(value, dict):
-        raise ValueError(f"{name} must be a JSON object")
-    return value
-
-
-def _optional_str(value: object, name: str) -> str | None:
-    """Validate an optional string field."""
-
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError(f"{name} must be a string")
-    return value
-
-
-def _optional_str_list(value: object, name: str) -> list[str] | None:
-    """Validate an optional list[str] field."""
-
-    if value is None:
-        return None
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ValueError(f"{name} must be a list of strings")
-    return list(value)
-
-
-def _optional_non_negative_int(value: object, name: str) -> int | None:
-    """Validate an optional non-negative integer."""
-
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{name} must be a non-negative integer")
-    return value
-
-
-def _optional_str_int_dict(value: object, name: str) -> dict[str, int] | None:
-    """Validate an optional mapping[str, int] field."""
-
-    if value is None:
-        return None
-    data = _expect_mapping(value, name)
-    cleaned: dict[str, int] = {}
-    for key, item in data.items():
-        if not isinstance(key, str):
-            raise ValueError(f"{name} keys must be strings")
-        number = _optional_non_negative_int(item, f"{name}.{key}")
-        assert number is not None
-        cleaned[key] = number
-    return cleaned
-
-
 def load_rules(path: Path) -> Rules:
-    """Load rules.json and validate its structure before use."""
+    """rules.json を読み込み、Rules データクラスに変換して返す。
 
+    unknown_category_mode に想定外の値が入っていた場合は "warn" に戻す。
+    設定ファイルの記述ミスでアプリが止まらないようにするための安全策。
+    """
     data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError("rules.json root must be a JSON object")
 
-    allowed = _optional_str_list(data.get("allowed_categories"), "allowed_categories")
-    banned = _optional_str_list(data.get("banned_words"), "banned_words")
+    allowed = data.get("allowed_categories")
+    banned = data.get("banned_words")
 
-    raw_mode = _optional_str(data.get("unknown_category_mode"), "unknown_category_mode")
-    mode = (raw_mode or "warn").lower()
+    # 想定外のモード値はデフォルトの "warn" に正規化する
+    mode = (data.get("unknown_category_mode") or "warn").lower()
     if mode not in {"warn", "ignore", "fallback"}:
         mode = "warn"
 
-    fallback = _optional_str(data.get("fallback_category"), "fallback_category")
+    fallback = data.get("fallback_category")
 
-    raw_date_range = data.get("date_range")
-    date_range_map = {} if raw_date_range is None else _expect_mapping(raw_date_range, "date_range")
-    date_range = DateRange(
-        min=_optional_str(date_range_map.get("min"), "date_range.min"),
-        max=_optional_str(date_range_map.get("max"), "date_range.max"),
-    )
+    dr = data.get("date_range") or {}
+    date_range = DateRange(min=dr.get("min"), max=dr.get("max"))
 
-    raw_limits = data.get("limits")
-    limits_map = {} if raw_limits is None else _expect_mapping(raw_limits, "limits")
+    lim = data.get("limits") or {}
     limits = Limits(
-        daily_total=_optional_non_negative_int(limits_map.get("daily_total"), "limits.daily_total"),
-        monthly_total=_optional_non_negative_int(limits_map.get("monthly_total"), "limits.monthly_total"),
-        category_daily=_optional_str_int_dict(limits_map.get("category_daily"), "limits.category_daily"),
-        category_monthly=_optional_str_int_dict(limits_map.get("category_monthly"), "limits.category_monthly"),
+        daily_total=lim.get("daily_total"),
+        monthly_total=lim.get("monthly_total"),
+        category_daily=lim.get("category_daily"),
+        category_monthly=lim.get("category_monthly"),
     )
 
     return Rules(

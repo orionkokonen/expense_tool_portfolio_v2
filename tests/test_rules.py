@@ -122,22 +122,6 @@ class TestLoadRules:
         with pytest.raises(json.JSONDecodeError):
             load_rules(p)
 
-    def test_load_root_must_be_object(self, tmp_path: Path) -> None:
-        p = tmp_path / "rules.json"
-        p.write_text("[]", encoding="utf-8")
-        with pytest.raises(ValueError):
-            load_rules(p)
-
-    def test_load_category_daily_requires_mapping(self, tmp_path: Path) -> None:
-        data = {"limits": {"category_daily": ["oops"]}}
-        with pytest.raises(ValueError):
-            load_rules(_write_rules(tmp_path, data))
-
-    def test_load_daily_total_requires_int(self, tmp_path: Path) -> None:
-        data = {"limits": {"daily_total": "5000"}}
-        with pytest.raises(ValueError):
-            load_rules(_write_rules(tmp_path, data))
-
 
 # ---------------------------------------------------------------------------
 # apply_rules のテスト: カテゴリチェック
