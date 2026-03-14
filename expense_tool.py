@@ -8,6 +8,7 @@ GUI（app.py）と同じパイプラインを使っているが、引数の受�
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -110,16 +111,27 @@ def main(argv: list[str] | None = None) -> int:
     # --timestamp ありのときだけファイル名に日時を付ける
     ts = datetime_now_stamp() if args.timestamp else None
 
-    # 1) CSV 読み込み
-    rows = read_csv(str(csv_path))
+    try:
+        # 1) CSV 読み込み
+        rows = read_csv(str(csv_path))
 
-    # 2) 基本入力チェック（必須列・日付・金額・重複） → errors / ok_rows
-    ok_rows, errors = check_rows(rows)
+        # 2) 基本入力チェック（必須列・日付・金額・重複） → errors / ok_rows
+        ok_rows, errors = check_rows(rows)
 
-    # 3) 社内ルールチェック（カテゴリ・禁止ワード・日付範囲・上限） → warnings
-    rules = load_rules(rules_path)
-    ok_norm = normalize_ok_rows(ok_rows)
-    clean_rows, warnings = apply_rules(ok_norm, rules)
+        # 3) 社内ルールチェック（カテゴリ・禁止ワード・日付範囲・上限） → warnings
+        rules = load_rules(rules_path)
+        ok_norm = normalize_ok_rows(ok_rows)
+        clean_rows, warnings = apply_rules(ok_norm, rules)
+    except (
+        ValueError,
+        FileNotFoundError,
+        PermissionError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        OSError,
+    ) as exc:
+        print(f"エラー: {exc}", file=sys.stderr)
+        return 2
 
     # 4) 出力ファイルパスを組み立てる（フォルダで分けているので prefix は不要）
     errors_csv = out_dir / _stamp_name("errors", "csv", ts)

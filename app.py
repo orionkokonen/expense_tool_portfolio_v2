@@ -17,19 +17,8 @@ from typing import Any
 import streamlit as st
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
-from excel_export import write_xlsx_report
-from expense_core import (
-    IssueRow,
-    SummaryRow,
-    WarningRow,
-    check_rows,
-    make_summary,
-    normalize_ok_rows,
-    read_csv,
-    write_csv,
-)
-from html_report import write_html_report
-from rules import apply_rules, load_rules
+import app_services
+from expense_core import IssueRow, SummaryRow, WarningRow
 from ui_html import normalize_html_fragment
 
 # セッションに直前の実行結果を残し、画面が再描画されても結果を見失わないようにする。
@@ -108,7 +97,7 @@ def _inject_styles() -> None:
           }
 
           [data-testid="stFileUploaderDropzoneInstructions"] small::after {
-            content: "1ファイルあたり上限 200MB・CSV";
+            content: "実用目安 10MB・CSV";
             font-size: 0.95rem;
           }
 
@@ -332,13 +321,8 @@ def _ensure_dir(path: Path) -> None:
 
 
 def _save_upload(uploaded_file: UploadedFile, dir_path: Path) -> Path:
-    """アップロードされた CSV を一時フォルダへ保存する。
-
-    画面から受け取る UploadedFile を、既存のファイルパス前提の処理へ渡せる形にそろえる。
-    """
-    path = dir_path / str(uploaded_file.name)
-    path.write_bytes(uploaded_file.getbuffer())
-    return path
+    """Backward-compatible wrapper around the shared upload helper."""
+    return app_services.save_upload(uploaded_file, dir_path)
 
 
 def _stamp_name(prefix: str, base: str, ext: str) -> str:
@@ -544,82 +528,15 @@ def _run_pipeline(
     do_excel: bool,
     do_html: bool,
 ) -> dict[str, Any]:
-    """GUI から使う共通実行パイプライン。
-
-    CLI と同じ順序で処理し、画面表示とダウンロードに必要な情報をまとめて返す。
-    """
-    _ensure_dir(out_dir)
-    prefix = csv_path.stem
-
-    # まず「入力として読めるか」を確認し、その後で社内ルールと集計へ進む。
-    rows = read_csv(str(csv_path))
-    ok_rows, errors = check_rows(rows)
-    rules = load_rules(rules_path)
-    ok_norm = normalize_ok_rows(ok_rows)
-    clean_rows, warnings = apply_rules(ok_norm, rules)
-    summary = make_summary(clean_rows, top_n=top_n)
-
-    # 画面からも外部ファイルからも追いやすいよう、成果物の名前を統一する。
-    errors_csv = out_dir / _stamp_name(prefix, "errors", "csv")
-    warnings_csv = out_dir / _stamp_name(prefix, "warnings", "csv")
-    clean_csv = out_dir / _stamp_name(prefix, "clean", "csv")
-    summary_csv = out_dir / _stamp_name(prefix, "summary", "csv")
-
-    write_csv(str(errors_csv), errors, ["row", "date", "amount", "merchant", "category", "reason"])
-    write_csv(
-        str(warnings_csv),
-        warnings,
-        ["kind", "row", "date", "month", "category", "merchant", "amount", "message"],
+    """Backward-compatible wrapper around the shared pipeline."""
+    return app_services.run_pipeline(
+        csv_path=csv_path,
+        rules_path=rules_path,
+        out_dir=out_dir,
+        top_n=top_n,
+        do_excel=do_excel,
+        do_html=do_html,
     )
-    write_csv(str(clean_csv), clean_rows, ["date", "amount", "merchant", "category"])
-    write_csv(str(summary_csv), summary, ["type", "key", "value"])
-
-    output_paths: dict[str, Path] = {
-        "errors_csv": errors_csv,
-        "warnings_csv": warnings_csv,
-        "clean_csv": clean_csv,
-        "summary_csv": summary_csv,
-    }
-
-    xlsx_path = out_dir / _stamp_name(prefix, "report", "xlsx")
-    html_path = out_dir / _stamp_name(prefix, "report", "html")
-
-    # 生成に時間のかかる出力はチェックボックスで切り替えられるようにして、必要なときだけ動かす。
-    if do_excel:
-        write_xlsx_report(
-            path=xlsx_path,
-            errors=errors,
-            warnings=warnings,
-            clean=clean_rows,
-            summary=summary,
-        )
-        output_paths["report_xlsx"] = xlsx_path
-
-    if do_html:
-        write_html_report(
-            path=html_path,
-            errors=errors,
-            warnings=warnings,
-            clean=clean_rows,
-            summary=summary,
-            title="支出レポート",
-        )
-        output_paths["report_html"] = html_path
-
-    # 画面は再描画が多いので、必要な材料を 1 つの辞書にまとめて session_state に入れる。
-    return {
-        "source_name": csv_path.name,
-        "errors": errors,
-        "warnings": warnings,
-        "summary": summary,
-        "clean_rows": clean_rows,
-        "input_count": len(rows),
-        "valid_count": len(ok_rows),
-        "clean_count": len(clean_rows),
-        "top_n": top_n,
-        "output_paths": {key: str(value) for key, value in output_paths.items()},
-        "enabled_outputs": {"excel": do_excel, "html": do_html},
-    }
 
 
 def _render_hero() -> None:
@@ -982,6 +899,8 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
                 use_container_width=True,
                 key="download_source_csv",
             )
+        elif last_run.get("source_name"):
+            st.caption("アップロード元 CSV の再ダウンロードはメモリ節約のため保持していません。")
 
         # 画面ラベルと MIME type をまとめて定義し、ボタン生成を共通化する。
         download_specs = [
@@ -1029,6 +948,9 @@ def main() -> None:
         st.header("実行設定")
         uploaded_csv = st.file_uploader("CSV ファイル", type=["csv"])
         st.caption("必須列: date / amount / merchant / category")
+        st.caption(
+            f"大きな CSV はメモリ不足を避けるため {app_services.MAX_UPLOAD_SIZE_MB}MB までに制限しています。"
+        )
         run_upload_btn = st.button(
             "アップロードした CSV を実行",
             type="primary",
@@ -1064,29 +986,13 @@ def main() -> None:
     _project_root = Path.cwd().resolve()
 
     def _safe_resolve(raw: str) -> Path | None:
-        """ユーザー入力のパスを安全な絶対パスに変換する。
-
-        仕組み:
-          1. Path.cwd() / raw → 相対パスを現在ディレクトリ基準で結合
-          2. .resolve()       → ".." などを展開し、最終的な絶対パスにする
-          3. startswith チェック → プロジェクト外を指していたら None で拒否
-
-        None を返したらパス不正、呼び出し側でエラーメッセージを表示する。
-        """
-        try:
-            resolved = (Path.cwd() / raw).resolve()
-        except (OSError, ValueError):
-            # パス文字列自体が不正（制御文字を含むなど）の場合
-            return None
-        if not str(resolved).startswith(str(_project_root)):
-            # プロジェクトルートの外を指している → 拒否
-            return None
-        return resolved
+        """ユーザー入力のパスを、プロジェクト内に限定して解決する。"""
+        return app_services.resolve_project_path(raw, project_root=_project_root)
 
     # どのボタンから実行しても、ここから先は同じパイプラインに流す。
     if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
-        rules_path = _safe_resolve(rules_path_str)
-        out_dir = _safe_resolve(out_dir_str)
+        rules_path = app_services.resolve_project_path(rules_path_str, project_root=_project_root)
+        out_dir = app_services.resolve_project_path(out_dir_str, project_root=_project_root)
         result: dict[str, Any] | None = None
 
         if rules_path is None or out_dir is None:
@@ -1107,8 +1013,8 @@ def main() -> None:
                     else:
                         # アップロードファイルも一度パス付きファイルにして、共通関数へ渡す。
                         with tempfile.TemporaryDirectory() as tmp:
-                            csv_path = _save_upload(uploaded_csv, Path(tmp))
-                            result = _run_pipeline(
+                            csv_path = app_services.save_upload(uploaded_csv, Path(tmp))
+                            result = app_services.run_pipeline(
                                 csv_path=csv_path,
                                 rules_path=rules_path,
                                 out_dir=out_dir,
@@ -1116,8 +1022,6 @@ def main() -> None:
                                 do_excel=do_excel,
                                 do_html=do_html,
                             )
-                            if result is not None:
-                                result["source_bytes"] = uploaded_csv.getvalue()
                 else:
                     sample_csv_path = (
                         SAMPLE_BAD_CSV_PATH if run_sample_bad_btn else SAMPLE_GOOD_CSV_PATH
@@ -1125,7 +1029,7 @@ def main() -> None:
                     if not sample_csv_path.exists():
                         run_error = f"サンプル CSV が見つかりません: {sample_csv_path}"
                     else:
-                        result = _run_pipeline(
+                        result = app_services.run_pipeline(
                             csv_path=sample_csv_path,
                             rules_path=rules_path,
                             out_dir=out_dir,
@@ -1185,3 +1089,4 @@ def main() -> None:
 
 # Streamlit はスクリプトを上から実行するので、最後に入口関数を呼ぶ。
 main()
+
