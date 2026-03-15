@@ -20,7 +20,7 @@ from expense_core import (
     write_csv,
 )
 from html_report import write_html_report
-from rules import apply_rules, load_rules
+from rules import apply_rules, find_duplicate_candidates, load_rules
 
 
 def _ensure_dir(path: Path) -> None:
@@ -113,13 +113,22 @@ def main(argv: list[str] | None = None) -> int:
     # 1) CSV 読み込み
     rows = read_csv(str(csv_path))
 
-    # 2) 基本入力チェック（必須列・日付・金額・重複） → errors / ok_rows
+    # 2) 基本入力チェック（必須列・日付・金額） → errors / ok_rows
     ok_rows, errors = check_rows(rows)
 
     # 3) 社内ルールチェック（カテゴリ・禁止ワード・日付範囲・上限） → warnings
-    rules = load_rules(rules_path)
+    try:
+        rules = load_rules(rules_path)
+    except ValueError as exc:
+        print(f"rules.json の検証エラー:\n{exc}", file=sys.stderr)
+        return 2
     ok_norm = normalize_ok_rows(ok_rows)
-    clean_rows, warnings = apply_rules(ok_norm, rules)
+
+    # 重複候補を warning として検出（clean_rows からは除外しない）
+    dup_warnings = find_duplicate_candidates(ok_norm)
+
+    clean_rows, rule_warnings = apply_rules(ok_norm, rules)
+    warnings = dup_warnings + rule_warnings
 
     # 4) 出力ファイルパスを組み立てる（フォルダで分けているので prefix は不要）
     errors_csv = out_dir / _stamp_name("errors", "csv", ts)

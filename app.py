@@ -3,33 +3,34 @@
 
 CLI と同じ処理パイプラインをボタン操作でたどれるようにし、
 入力 -> 判定 -> 集計 -> ダウンロードを一画面で追えるようにしている。
+非 UI の処理は app_helper.py に切り出している。
 """
 
 from __future__ import annotations
 
 import json
-import tempfile
 from collections import Counter
 from html import escape
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
-from streamlit.runtime.uploaded_file_manager import UploadedFile
 
-from excel_export import write_xlsx_report
+from app_helper import (
+    RunResult,
+    copy_source_csv,
+    generate_run_id,
+    make_output_dir,
+    read_file_bytes,
+    run_pipeline,
+    safe_resolve,
+    save_source_csv,
+)
 from expense_core import (
     IssueRow,
     SummaryRow,
     WarningRow,
-    check_rows,
-    make_summary,
-    normalize_ok_rows,
-    read_csv,
-    write_csv,
 )
-from html_report import write_html_report
-from rules import apply_rules, load_rules
 from ui_html import normalize_html_fragment
 
 # セッションに直前の実行結果を残し、画面が再描画されても結果を見失わないようにする。
@@ -323,40 +324,6 @@ def _inject_styles() -> None:
     )
 
 
-def _ensure_dir(path: Path) -> None:
-    """出力先フォルダを先に作る。
-
-    書き込み時の FileNotFoundError を避けるため、親フォルダもまとめて用意する。
-    """
-    path.mkdir(parents=True, exist_ok=True)
-
-
-def _save_upload(uploaded_file: UploadedFile, dir_path: Path) -> Path:
-    """アップロードされた CSV を一時フォルダへ保存する。
-
-    画面から受け取る UploadedFile を、既存のファイルパス前提の処理へ渡せる形にそろえる。
-    """
-    path = dir_path / str(uploaded_file.name)
-    path.write_bytes(uploaded_file.getbuffer())
-    return path
-
-
-def _stamp_name(prefix: str, base: str, ext: str) -> str:
-    """出力ファイル名を共通ルールで組み立てる。"""
-    return f"{prefix}_{base}.{ext}"
-
-
-def _read_bytes(path: Path) -> bytes | None:
-    """ダウンロード用にファイルを bytes で読む。
-
-    読めない場合は None を返し、画面側で警告表示に回してアプリ全体は止めない。
-    """
-    try:
-        return path.read_bytes()
-    except OSError:
-        return None
-
-
 def _to_int(value: Any) -> int | None:
     """値を整数に寄せる。
 
@@ -533,93 +500,6 @@ def _render_bar_card(
         </div>
         """
     )
-
-
-def _run_pipeline(
-    *,
-    csv_path: Path,
-    rules_path: Path,
-    out_dir: Path,
-    top_n: int,
-    do_excel: bool,
-    do_html: bool,
-) -> dict[str, Any]:
-    """GUI から使う共通実行パイプライン。
-
-    CLI と同じ順序で処理し、画面表示とダウンロードに必要な情報をまとめて返す。
-    """
-    _ensure_dir(out_dir)
-    prefix = csv_path.stem
-
-    # まず「入力として読めるか」を確認し、その後で社内ルールと集計へ進む。
-    rows = read_csv(str(csv_path))
-    ok_rows, errors = check_rows(rows)
-    rules = load_rules(rules_path)
-    ok_norm = normalize_ok_rows(ok_rows)
-    clean_rows, warnings = apply_rules(ok_norm, rules)
-    summary = make_summary(clean_rows, top_n=top_n)
-
-    # 画面からも外部ファイルからも追いやすいよう、成果物の名前を統一する。
-    errors_csv = out_dir / _stamp_name(prefix, "errors", "csv")
-    warnings_csv = out_dir / _stamp_name(prefix, "warnings", "csv")
-    clean_csv = out_dir / _stamp_name(prefix, "clean", "csv")
-    summary_csv = out_dir / _stamp_name(prefix, "summary", "csv")
-
-    write_csv(str(errors_csv), errors, ["row", "date", "amount", "merchant", "category", "reason"])
-    write_csv(
-        str(warnings_csv),
-        warnings,
-        ["kind", "row", "date", "month", "category", "merchant", "amount", "message"],
-    )
-    write_csv(str(clean_csv), clean_rows, ["date", "amount", "merchant", "category"])
-    write_csv(str(summary_csv), summary, ["type", "key", "value"])
-
-    output_paths: dict[str, Path] = {
-        "errors_csv": errors_csv,
-        "warnings_csv": warnings_csv,
-        "clean_csv": clean_csv,
-        "summary_csv": summary_csv,
-    }
-
-    xlsx_path = out_dir / _stamp_name(prefix, "report", "xlsx")
-    html_path = out_dir / _stamp_name(prefix, "report", "html")
-
-    # 生成に時間のかかる出力はチェックボックスで切り替えられるようにして、必要なときだけ動かす。
-    if do_excel:
-        write_xlsx_report(
-            path=xlsx_path,
-            errors=errors,
-            warnings=warnings,
-            clean=clean_rows,
-            summary=summary,
-        )
-        output_paths["report_xlsx"] = xlsx_path
-
-    if do_html:
-        write_html_report(
-            path=html_path,
-            errors=errors,
-            warnings=warnings,
-            clean=clean_rows,
-            summary=summary,
-            title="支出レポート",
-        )
-        output_paths["report_html"] = html_path
-
-    # 画面は再描画が多いので、必要な材料を 1 つの辞書にまとめて session_state に入れる。
-    return {
-        "source_name": csv_path.name,
-        "errors": errors,
-        "warnings": warnings,
-        "summary": summary,
-        "clean_rows": clean_rows,
-        "input_count": len(rows),
-        "valid_count": len(ok_rows),
-        "clean_count": len(clean_rows),
-        "top_n": top_n,
-        "output_paths": {key: str(value) for key, value in output_paths.items()},
-        "enabled_outputs": {"excel": do_excel, "html": do_html},
-    }
 
 
 def _render_hero() -> None:
@@ -860,7 +740,7 @@ def _render_validation(last_run: dict[str, Any]) -> None:
     """
     errors = last_run["errors"]
     warnings = last_run["warnings"]
-    clean_rows = last_run["clean_rows"]
+    clean_preview = last_run["clean_preview"]
 
     insight_left, insight_right = st.columns(2)
     with insight_left:
@@ -896,18 +776,9 @@ def _render_validation(last_run: dict[str, Any]) -> None:
 
     with tab_clean:
         # 画面が重くならないよう、プレビューは先頭 100 行までに絞る。
-        preview_rows = [
-            {
-                "date": row.get("date", ""),
-                "amount": row.get("amount", ""),
-                "merchant": row.get("merchant", ""),
-                "category": row.get("category", ""),
-            }
-            for row in clean_rows[:100]
-        ]
         st.caption("プレビューは先頭 100 行まで表示しています。")
-        if preview_rows:
-            st.dataframe(preview_rows, use_container_width=True, hide_index=True)
+        if clean_preview:
+            st.dataframe(clean_preview, use_container_width=True, hide_index=True)
         else:
             st.info("クリーン行がありません。")
 
@@ -972,16 +843,20 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
 
     with button_col:
         st.subheader("ダウンロード")
-        source_bytes = last_run.get("source_bytes")
-        if isinstance(source_bytes, bytes):
-            st.download_button(
-                label="元のCSVをダウンロード",
-                data=source_bytes,
-                file_name=last_run["source_name"],
-                mime="text/csv",
-                use_container_width=True,
-                key="download_source_csv",
-            )
+
+        # 元 CSV のダウンロード: 保存ファイルから読む（session_state に bytes を持たない）
+        source_path_str = last_run.get("source_path")
+        if source_path_str:
+            source_data = read_file_bytes(Path(source_path_str))
+            if isinstance(source_data, bytes):
+                st.download_button(
+                    label="元のCSVをダウンロード",
+                    data=source_data,
+                    file_name=last_run["source_name"],
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="download_source_csv",
+                )
 
         # 画面ラベルと MIME type をまとめて定義し、ボタン生成を共通化する。
         download_specs = [
@@ -1001,7 +876,7 @@ def _render_downloads(last_run: dict[str, Any]) -> None:
             output_path = output_paths.get(key)
             if output_path is None:
                 continue
-            payload = _read_bytes(output_path)
+            payload = read_file_bytes(output_path)
             if payload is None:
                 st.warning(f"出力ファイルを読み込めませんでした: {output_path}")
                 continue
@@ -1057,42 +932,15 @@ def main() -> None:
     run_error: str | None = None
 
     # ── パストラバーサル対策 ──
-    # 「パストラバーサル」= "../../../etc/passwd" のように相対パスで
-    # プロジェクト外のファイルへアクセスさせる攻撃手法。
-    # ユーザーが入力したパスを resolve()（絶対パスに変換）してから
-    # プロジェクトルートの中にあるかを確認し、外部アクセスをブロックする。
     _project_root = Path.cwd().resolve()
-
-    def _safe_resolve(raw: str) -> Path | None:
-        """ユーザー入力のパスを安全な絶対パスに変換する。
-
-        仕組み:
-          1. Path.cwd() / raw → 相対パスを現在ディレクトリ基準で結合
-          2. .resolve()       → ".." などを展開し、最終的な絶対パスにする
-          3. startswith チェック → プロジェクト外を指していたら None で拒否
-
-        None を返したらパス不正、呼び出し側でエラーメッセージを表示する。
-        """
-        try:
-            resolved = (Path.cwd() / raw).resolve()
-        except (OSError, ValueError):
-            # パス文字列自体が不正（制御文字を含むなど）の場合
-            return None
-        if not str(resolved).startswith(str(_project_root)):
-            # プロジェクトルートの外を指している → 拒否
-            return None
-        return resolved
 
     # どのボタンから実行しても、ここから先は同じパイプラインに流す。
     if run_upload_btn or run_sample_bad_btn or run_sample_good_btn:
-        rules_path = _safe_resolve(rules_path_str)
-        out_dir = _safe_resolve(out_dir_str)
-        result: dict[str, Any] | None = None
+        rules_path = safe_resolve(rules_path_str, _project_root)
+        out_base = safe_resolve(out_dir_str, _project_root)
+        result: RunResult | None = None
 
-        if rules_path is None or out_dir is None:
-            # ここで実行を止める理由:
-            # ユーザー入力をそのまま信用すると、アプリの外にあるファイルへ
-            # 読み書きされる危険があるため。
+        if rules_path is None or out_base is None:
             run_error = (
                 "パスがプロジェクトディレクトリの外を指しています。"
                 "安全のためブロックしました。"
@@ -1101,23 +949,28 @@ def main() -> None:
             run_error = f"rules.json が見つかりません: {rules_path}"
         else:
             try:
+                run_id = generate_run_id()
+                out_dir = make_output_dir(out_base, run_id)
+
                 if run_upload_btn:
                     if uploaded_csv is None:
                         run_error = "実行前に CSV ファイルをアップロードしてください。"
                     else:
-                        # アップロードファイルも一度パス付きファイルにして、共通関数へ渡す。
-                        with tempfile.TemporaryDirectory() as tmp:
-                            csv_path = _save_upload(uploaded_csv, Path(tmp))
-                            result = _run_pipeline(
-                                csv_path=csv_path,
-                                rules_path=rules_path,
-                                out_dir=out_dir,
-                                top_n=int(top_n),
-                                do_excel=do_excel,
-                                do_html=do_html,
-                            )
-                            if result is not None:
-                                result["source_bytes"] = uploaded_csv.getvalue()
+                        # アップロードファイルを run_id ディレクトリに保存
+                        source_saved = save_source_csv(
+                            uploaded_csv.getvalue(),
+                            str(uploaded_csv.name),
+                            out_dir,
+                        )
+                        result = run_pipeline(
+                            csv_path=source_saved,
+                            rules_path=rules_path,
+                            out_dir=out_dir,
+                            top_n=int(top_n),
+                            do_excel=do_excel,
+                            do_html=do_html,
+                            run_id=run_id,
+                        )
                 else:
                     sample_csv_path = (
                         SAMPLE_BAD_CSV_PATH if run_sample_bad_btn else SAMPLE_GOOD_CSV_PATH
@@ -1125,32 +978,26 @@ def main() -> None:
                     if not sample_csv_path.exists():
                         run_error = f"サンプル CSV が見つかりません: {sample_csv_path}"
                     else:
-                        result = _run_pipeline(
-                            csv_path=sample_csv_path,
+                        # サンプル CSV を run_id ディレクトリにコピー
+                        source_saved = copy_source_csv(sample_csv_path, out_dir)
+                        result = run_pipeline(
+                            csv_path=source_saved,
                             rules_path=rules_path,
                             out_dir=out_dir,
                             top_n=int(top_n),
                             do_excel=do_excel,
                             do_html=do_html,
+                            run_id=run_id,
                         )
-                        if result is not None:
-                            result["source_path"] = str(sample_csv_path.resolve())
-                            result["source_bytes"] = _read_bytes(sample_csv_path)
             # ── 例外を具体的に列挙してキャッチする ──
-            # except Exception（全例外キャッチ）だと、プログラムのバグまで
-            # 握りつぶしてしまい原因不明の不具合になりやすい。
-            # ここでは「ユーザー操作で起きうるエラー」だけを名前で指定し、
-            # 想定外のバグは通常どおり例外として浮上させる。
             except (
-                ValueError,          # CSV の形式不正、数値変換失敗など
+                ValueError,          # CSV の形式不正、数値変換失敗、rules.json 検証エラーなど
                 FileNotFoundError,   # ファイルが存在しない
                 PermissionError,     # ファイルの読み書き権限がない
                 UnicodeDecodeError,  # 文字コードが UTF-8 でない
                 json.JSONDecodeError,  # rules.json の JSON 構文エラー
                 OSError,             # ディスク容量不足などの OS レベルのエラー
             ) as exc:
-                # `pragma: no cover` は「この行は自動テストのカバレッジ集計から外す」
-                # という印。画面表示専用の分岐は、自動テストで細かく追いにくいため。
                 # pragma: no cover - UI surface
                 run_error = f"実行に失敗しました: {exc}"
 

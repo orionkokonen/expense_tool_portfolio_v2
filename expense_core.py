@@ -113,13 +113,14 @@ def parse_amount(s: str) -> bool:
 
 
 def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[IssueRow]]:
-    """全行に対して基本入力チェックを行い、OK 行とエラー行に振り分ける。
+    """全行に対して基本入力チェック（形式エラー専用）を行い、OK 行とエラー行に振り分ける。
 
     チェック項目:
       - 必須列の存在・空欄チェック
       - 日付フォーマット（YYYY-MM-DD）
       - 金額が整数か
-      - date + amount + merchant の組み合わせによる重複検出
+
+    重複判定はここでは行わず、正規化後に warning として別途検出する。
 
     エラーがあった行は後工程から除外することで、
     ルールチェックや集計が常に正常データだけを扱えるようになる。
@@ -130,9 +131,6 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
     """
     errors: list[IssueRow] = []
     ok_rows: list[ExpenseRow] = []
-
-    # set（集合）で重複を管理する。辞書と違い「存在するかどうか」だけを O(1) で確認できる。
-    seen: set[tuple[str, str, str]] = set()  # (date, amount, merchant_lower)
 
     for idx, r in enumerate(rows, start=2):  # CSV の 1 行目はヘッダなので 2 行目から数える
         reasons: list[str] = []
@@ -158,18 +156,6 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
         a = r.get("amount", "").strip()
         if a and not parse_amount(a):
             reasons.append("金額が数字じゃない")
-
-        # 重複チェック: merchant を小文字に統一して大文字・小文字の表記揺れを吸収する
-        date_k = r.get("date", "").strip()
-        amount_k = r.get("amount", "").strip()
-        merchant_k = r.get("merchant", "").strip().lower()
-
-        if date_k and amount_k and merchant_k:
-            key = (date_k, amount_k, merchant_k)
-            if key in seen:
-                reasons.append("重複している（date+amount+merchantが同じ）")
-            else:
-                seen.add(key)
 
         if reasons:
             errors.append(
@@ -283,15 +269,43 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[Summary
     return summary
 
 
+def sanitize_cell(value: str) -> str:
+    """エクスポート用のセル値を数式インジェクション対策で無害化する。
+
+    Excel や Google Sheets は、セルの先頭が `=`, `+`, `@` の場合に
+    数式として解釈してしまうことがある。また `-` で始まる文字列も
+    一部の環境では数式扱いされるリスクがある（ただし負の数値は除く）。
+    先頭に `'`（シングルクォート）を付けると「テキスト」として扱われる。
+    この関数はアプリ内部の計算には使わず、CSV / Excel への書き出し直前だけで使う。
+    """
+    if not value:
+        return value
+    if value[0] in ("=", "+", "@"):
+        return f"'{value}"
+    if value[0] == "-":
+        # 負の数値（例: "-500"）は正当な金額なので壊さない
+        try:
+            int(value)
+        except ValueError:
+            return f"'{value}"
+    return value
+
+
 def write_csv(path: str, rows: Sequence[Mapping[str, object]], fieldnames: Sequence[str]) -> None:
     """辞書のリストを CSV に書き出す。
 
     extrasaction="ignore" により、辞書に余分なキーがあっても無視して
     fieldnames で指定した列だけを出力できる。
     newline="" を明示するのは、Windows 環境で改行コードが二重に挿入されるのを防ぐため。
+    書き出し時に各セルの文字列値を sanitize_cell() で無害化し、
+    数式インジェクションを防ぐ。
     """
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         w.writeheader()
         for r in rows:
-            w.writerow(r)
+            sanitized = {
+                k: sanitize_cell(str(v)) if isinstance(v, str) else v
+                for k, v in r.items()
+            }
+            w.writerow(sanitized)

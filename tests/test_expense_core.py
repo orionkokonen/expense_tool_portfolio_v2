@@ -31,6 +31,7 @@ from expense_core import (
     parse_amount,
     parse_date,
     read_csv,
+    sanitize_cell,
     write_csv,
 )
 
@@ -178,8 +179,11 @@ class TestCheckRows:
         assert len(errors) == 1
         assert "金額" in errors[0]["reason"]
 
-    def test_duplicate_row_is_detected(self) -> None:
-        """同じ内容の行が 2 回出たら重複として検出できるか。"""
+    def test_duplicate_row_passes_check_rows(self) -> None:
+        """重複行は check_rows では弾かず、両方とも ok_rows に入るか。
+
+        重複判定は check_rows の責務から外し、warning として別途検出する。
+        """
         row = {
             "date": "2026-01-10",
             "amount": "1200",
@@ -187,9 +191,8 @@ class TestCheckRows:
             "category": "交通費",
         }
         ok_rows, errors = check_rows([row, dict(row)])
-        assert len(ok_rows) == 1
-        assert len(errors) == 1
-        assert "重複" in errors[0]["reason"]
+        assert len(ok_rows) == 2
+        assert len(errors) == 0
 
     def test_multiple_errors_are_joined(self) -> None:
         """1 行に複数の問題があれば、理由が連結されるか。"""
@@ -379,6 +382,61 @@ class TestMakeSummary:
         stats = {row["key"]: row["value"] for row in summary if row["type"] == "stats"}
         assert stats["count"] == "0"
         assert "average" not in stats
+
+
+class TestSanitizeCell:
+    """`sanitize_cell()` のテスト。
+
+    CSV / Excel 出力時に数式インジェクションを防ぐための無害化関数。
+    """
+
+    def test_equals_prefix(self) -> None:
+        """= で始まる文字列に ' が付くか。"""
+        assert sanitize_cell("=SUM(A1)") == "'=SUM(A1)"
+
+    def test_plus_prefix(self) -> None:
+        """+ で始まる文字列に ' が付くか。"""
+        assert sanitize_cell("+cmd") == "'+cmd"
+
+    def test_at_prefix(self) -> None:
+        """@ で始まる文字列に ' が付くか。"""
+        assert sanitize_cell("@SUM(A1)") == "'@SUM(A1)"
+
+    def test_minus_non_numeric(self) -> None:
+        """非数値の - 始まり文字列に ' が付くか。"""
+        assert sanitize_cell("-cmd|stuff") == "'-cmd|stuff"
+
+    def test_minus_numeric_not_sanitized(self) -> None:
+        """負の整数（返金・訂正）は壊さないか。"""
+        assert sanitize_cell("-500") == "-500"
+
+    def test_normal_string_unchanged(self) -> None:
+        """通常の文字列は変わらないか。"""
+        assert sanitize_cell("カフェA") == "カフェA"
+
+    def test_empty_string_unchanged(self) -> None:
+        """空文字はそのまま返るか。"""
+        assert sanitize_cell("") == ""
+
+    def test_zero_string_unchanged(self) -> None:
+        """数値 "0" はそのまま返るか。"""
+        assert sanitize_cell("0") == "0"
+
+
+class TestCheckRowsFormatOnly:
+    """check_rows が形式エラーだけを返すことのテスト。"""
+
+    def test_only_format_errors(self) -> None:
+        """形式エラーのみ検出し、重複はエラーに含めないか。"""
+        rows = [
+            {"date": "2026/01/10", "amount": "abc", "merchant": "A", "category": "交通費"},
+            {"date": "2026-01-10", "amount": "1200", "merchant": "A", "category": "交通費"},
+            {"date": "2026-01-10", "amount": "1200", "merchant": "A", "category": "交通費"},
+        ]
+        ok_rows, errors = check_rows(rows)
+        assert len(errors) == 1  # 形式エラーのみ
+        assert len(ok_rows) == 2  # 重複行も通る
+        assert "重複" not in errors[0]["reason"]
 
 
 class TestCsvIO:

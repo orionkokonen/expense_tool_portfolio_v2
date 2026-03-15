@@ -25,6 +25,7 @@ from rules import (
     Limits,
     Rules,
     apply_rules,
+    find_duplicate_candidates,
     load_rules,
 )
 
@@ -106,14 +107,11 @@ class TestLoadRules:
         assert rules.unknown_category_mode == "warn"
         assert rules.banned_words is None
 
-    def test_load_invalid_mode_falls_back_to_warn(self, tmp_path: Path) -> None:
-        """unknown_category_mode に想定外の値が入っていたら "warn" に戻るか。
-
-        設定ファイルのタイプミスでアプリが壊れないようにするための安全策。
-        """
+    def test_load_invalid_mode_raises(self, tmp_path: Path) -> None:
+        """unknown_category_mode に想定外の値が入っていたら ValueError になるか。"""
         data = {"unknown_category_mode": "invalid_mode"}
-        rules = load_rules(_write_rules(tmp_path, data))
-        assert rules.unknown_category_mode == "warn"
+        with pytest.raises(ValueError, match="unknown_category_mode"):
+            load_rules(_write_rules(tmp_path, data))
 
     def test_load_malformed_json_raises(self, tmp_path: Path) -> None:
         """壊れた JSON（構文エラー）は json.JSONDecodeError を出すか。"""
@@ -295,3 +293,110 @@ class TestApplyRulesLimits:
         ]
         _, warnings = apply_rules(rows, rules)
         assert any(w["kind"] == "limit_category_monthly" for w in warnings)
+
+
+# ---------------------------------------------------------------------------
+# rules.json のバリデーションテスト
+# テーマ: 不正な型や値で明示エラーになるか
+# ---------------------------------------------------------------------------
+
+class TestRulesValidation:
+    """rules.json の厳密バリデーションのテスト。"""
+
+    def test_non_object_top_level(self, tmp_path: Path) -> None:
+        """トップレベルが配列だと ValueError になるか。"""
+        p = tmp_path / "rules.json"
+        p.write_text("[]", encoding="utf-8")
+        with pytest.raises(ValueError, match="トップレベル"):
+            load_rules(p)
+
+    def test_allowed_categories_wrong_type(self, tmp_path: Path) -> None:
+        """allowed_categories が文字列リストでないと ValueError になるか。"""
+        data = {"allowed_categories": "not_a_list"}
+        with pytest.raises(ValueError, match="allowed_categories"):
+            load_rules(_write_rules(tmp_path, data))
+
+    def test_banned_words_wrong_type(self, tmp_path: Path) -> None:
+        """banned_words が文字列リストでないと ValueError になるか。"""
+        data = {"banned_words": [1, 2, 3]}
+        with pytest.raises(ValueError, match="banned_words"):
+            load_rules(_write_rules(tmp_path, data))
+
+    def test_fallback_category_wrong_type(self, tmp_path: Path) -> None:
+        """fallback_category が文字列でないと ValueError になるか。"""
+        data = {"fallback_category": 123}
+        with pytest.raises(ValueError, match="fallback_category"):
+            load_rules(_write_rules(tmp_path, data))
+
+    def test_unknown_mode_wrong_value(self, tmp_path: Path) -> None:
+        """unknown_category_mode が未知の値だと ValueError になるか。"""
+        data = {"unknown_category_mode": "bad_mode"}
+        with pytest.raises(ValueError, match="unknown_category_mode"):
+            load_rules(_write_rules(tmp_path, data))
+
+    def test_date_range_invalid_format(self, tmp_path: Path) -> None:
+        """date_range.min が YYYY-MM-DD でないと ValueError になるか。"""
+        data = {"date_range": {"min": "not-a-date"}}
+        with pytest.raises(ValueError, match="date_range.min"):
+            load_rules(_write_rules(tmp_path, data))
+
+    def test_limits_daily_total_not_int(self, tmp_path: Path) -> None:
+        """limits.daily_total が整数でないと ValueError になるか。"""
+        data = {"limits": {"daily_total": "5000"}}
+        with pytest.raises(ValueError, match="limits.daily_total"):
+            load_rules(_write_rules(tmp_path, data))
+
+    def test_limits_category_daily_wrong_structure(self, tmp_path: Path) -> None:
+        """limits.category_daily が {str: int} でないと ValueError になるか。"""
+        data = {"limits": {"category_daily": {"交通費": "not_int"}}}
+        with pytest.raises(ValueError, match="limits.category_daily"):
+            load_rules(_write_rules(tmp_path, data))
+
+
+# ---------------------------------------------------------------------------
+# 重複候補検出のテスト
+# テーマ: 同じキーの行がグループ全体に warning を付けるか
+# ---------------------------------------------------------------------------
+
+class TestFindDuplicateCandidates:
+    """find_duplicate_candidates() のテスト。"""
+
+    def test_duplicate_pair_warns_both(self) -> None:
+        """同じキーの 2 行に対して、両方に warning が付くか。"""
+        rows = [
+            _row(date="2026-01-10", amount=1200, merchant="A", row="2"),
+            _row(date="2026-01-10", amount=1200, merchant="A", row="3"),
+        ]
+        warnings = find_duplicate_candidates(rows)
+        assert len(warnings) == 2
+        assert all(w["kind"] == "duplicate_candidate" for w in warnings)
+        row_ids = {w["row"] for w in warnings}
+        assert row_ids == {"2", "3"}
+
+    def test_no_duplicates_no_warnings(self) -> None:
+        """重複がない場合は warning なしか。"""
+        rows = [
+            _row(date="2026-01-10", amount=1200, merchant="A", row="2"),
+            _row(date="2026-01-11", amount=1200, merchant="A", row="3"),
+        ]
+        warnings = find_duplicate_candidates(rows)
+        assert len(warnings) == 0
+
+    def test_merchant_case_insensitive(self) -> None:
+        """merchant の大文字小文字を区別しないか。"""
+        rows = [
+            _row(date="2026-01-10", amount=1200, merchant="Cafe", row="2"),
+            _row(date="2026-01-10", amount=1200, merchant="cafe", row="3"),
+        ]
+        warnings = find_duplicate_candidates(rows)
+        assert len(warnings) == 2
+
+    def test_triple_duplicate_warns_all_three(self) -> None:
+        """3 件の重複グループでも全行に warning が付くか。"""
+        rows = [
+            _row(date="2026-01-10", amount=1200, merchant="A", row="2"),
+            _row(date="2026-01-10", amount=1200, merchant="A", row="3"),
+            _row(date="2026-01-10", amount=1200, merchant="A", row="4"),
+        ]
+        warnings = find_duplicate_candidates(rows)
+        assert len(warnings) == 3

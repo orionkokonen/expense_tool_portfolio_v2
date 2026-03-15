@@ -26,7 +26,7 @@ from openpyxl.utils import get_column_letter
 # そのおかげで、補完が効いたり、別の型を渡すミスに気づきやすくなったりする。
 from openpyxl.worksheet.worksheet import Worksheet
 
-from expense_core import SummaryRow
+from expense_core import SummaryRow, sanitize_cell
 
 # import は「標準機能 → 外部ライブラリ → このプロジェクト内のコード」の順にそろえる。
 # こうしておくと、どこから来た名前か追いやすくなり、整形ツールでも同じ形を保ちやすい。
@@ -97,9 +97,12 @@ def _add_table_sheet(
         c.font = header_font
         c.alignment = Alignment(vertical="center")
 
-    # データ行を書き込む
+    # データ行を書き込む（文字列セルは数式インジェクション対策で無害化する）
     for r in rows:
-        ws.append([r.get(c, "") for c in columns])
+        ws.append([
+            sanitize_cell(str(v)) if isinstance(v := r.get(c, ""), str) else v
+            for c in columns
+        ])
 
     # 先頭行を固定し、フィルタを有効にする（データ量が多い場合の操作性向上）
     ws.freeze_panes = "A2"

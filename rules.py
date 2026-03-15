@@ -9,6 +9,7 @@ rules.json を読み込み、入力チェック済みの行に対して「社内
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -45,28 +46,117 @@ class Rules:
     limits: Limits = Limits()
 
 
+def _validate_rules_data(data: object) -> dict[str, object]:
+    """rules.json の内容を厳密に検証し、不正な値には ValueError で失敗する。
+
+    省略されたキーにはデフォルト値を使うが、
+    指定されているのに型や値が不正な場合は黙って補正せず明示エラーにする。
+    """
+    if not isinstance(data, dict):
+        raise ValueError("rules.json のトップレベルはオブジェクト（{}）である必要があります")
+
+    errors: list[str] = []
+
+    # allowed_categories: 省略可。指定時は list[str]
+    if "allowed_categories" in data:
+        ac = data["allowed_categories"]
+        if not isinstance(ac, list) or not all(isinstance(x, str) for x in ac):
+            errors.append("allowed_categories は文字列のリストである必要があります")
+
+    # banned_words: 省略可。指定時は list[str]
+    if "banned_words" in data:
+        bw = data["banned_words"]
+        if not isinstance(bw, list) or not all(isinstance(x, str) for x in bw):
+            errors.append("banned_words は文字列のリストである必要があります")
+
+    # fallback_category: 省略可。指定時は str
+    if "fallback_category" in data:
+        fc = data["fallback_category"]
+        if not isinstance(fc, str):
+            errors.append("fallback_category は文字列である必要があります")
+
+    # unknown_category_mode: 省略可。指定時は "warn" | "ignore" | "fallback"
+    if "unknown_category_mode" in data:
+        mode = data["unknown_category_mode"]
+        if not isinstance(mode, str) or mode.lower() not in {"warn", "ignore", "fallback"}:
+            errors.append(
+                "unknown_category_mode は 'warn', 'ignore', 'fallback'"
+                " のいずれかである必要があります"
+            )
+
+    # date_range: 省略可。指定時は dict で min/max は YYYY-MM-DD
+    if "date_range" in data:
+        dr = data["date_range"]
+        if not isinstance(dr, dict):
+            errors.append("date_range はオブジェクトである必要があります")
+        else:
+            for key in ("min", "max"):
+                if key in dr:
+                    val = dr[key]
+                    if not isinstance(val, str):
+                        errors.append(f"date_range.{key} は文字列である必要があります")
+                    else:
+                        try:
+                            datetime.strptime(val, "%Y-%m-%d")
+                        except ValueError:
+                            errors.append(
+                                f"date_range.{key} は YYYY-MM-DD 形式である必要があります: {val!r}"
+                            )
+
+    # limits: 省略可。指定時は dict
+    if "limits" in data:
+        lim = data["limits"]
+        if not isinstance(lim, dict):
+            errors.append("limits はオブジェクトである必要があります")
+        else:
+            for key in ("daily_total", "monthly_total"):
+                if key in lim:
+                    val = lim[key]
+                    if not isinstance(val, int):
+                        errors.append(f"limits.{key} は整数である必要があります")
+
+            for key in ("category_daily", "category_monthly"):
+                if key in lim:
+                    val = lim[key]
+                    if not isinstance(val, dict):
+                        errors.append(f"limits.{key} はオブジェクトである必要があります")
+                    elif not all(
+                        isinstance(k, str) and isinstance(v, int)
+                        for k, v in val.items()
+                    ):
+                        errors.append(
+                            f"limits.{key} は {{カテゴリ名: 整数}} の形式である必要があります"
+                        )
+
+    if errors:
+        raise ValueError("rules.json の検証エラー:\n  " + "\n  ".join(errors))
+
+    return data
+
+
 def load_rules(path: Path) -> Rules:
     """rules.json を読み込み、Rules データクラスに変換して返す。
 
-    unknown_category_mode に想定外の値が入っていた場合は "warn" に戻す。
-    設定ファイルの記述ミスでアプリが止まらないようにするための安全策。
+    指定されたキーの型や値が不正な場合は ValueError で明示的に失敗する。
+    省略されたキーにはデフォルト値を使う。
     """
-    data = json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    data = _validate_rules_data(raw)
 
     allowed = data.get("allowed_categories")
     banned = data.get("banned_words")
 
-    # 想定外のモード値はデフォルトの "warn" に正規化する
-    mode = (data.get("unknown_category_mode") or "warn").lower()
-    if mode not in {"warn", "ignore", "fallback"}:
-        mode = "warn"
+    mode_raw = data.get("unknown_category_mode")
+    mode = mode_raw.lower() if isinstance(mode_raw, str) else "warn"
 
     fallback = data.get("fallback_category")
 
     dr = data.get("date_range") or {}
+    assert isinstance(dr, dict)
     date_range = DateRange(min=dr.get("min"), max=dr.get("max"))
 
     lim = data.get("limits") or {}
+    assert isinstance(lim, dict)
     limits = Limits(
         daily_total=lim.get("daily_total"),
         monthly_total=lim.get("monthly_total"),
@@ -75,10 +165,10 @@ def load_rules(path: Path) -> Rules:
     )
 
     return Rules(
-        allowed_categories=allowed,
+        allowed_categories=allowed,  # type: ignore[arg-type]
         unknown_category_mode=mode,
-        fallback_category=fallback,
-        banned_words=banned,
+        fallback_category=fallback,  # type: ignore[arg-type]
+        banned_words=banned,  # type: ignore[arg-type]
         date_range=date_range,
         limits=limits,
     )
@@ -98,6 +188,46 @@ def _valid_date(s: str) -> bool:
     # この 2 つだけをキャッチし、それ以外の想定外エラーは見逃さないようにする。
     except (ValueError, TypeError):
         return False
+
+
+def find_duplicate_candidates(
+    rows: list[ExpenseRowNorm],
+) -> list[WarningRow]:
+    """正規化済み行に対して重複候補を検出し、warning として返す。
+
+    キーは (date, amount, merchant.lower()) で、同じキーを持つ行が 2 件以上ある場合、
+    そのグループに属する全行（1 件目を含む）を重複候補として警告する。
+    重複候補は clean_rows から除外しない。
+    """
+    warnings: list[WarningRow] = []
+
+    # グループごとに行インデックスを集める
+    groups: defaultdict[tuple[str, str, str], list[int]] = defaultdict(list)
+    for i, r in enumerate(rows):
+        key = (r["date"], str(r["amount"]), r["merchant"].lower())
+        groups[key].append(i)
+
+    # 2 件以上あるグループの全行に warning を付ける
+    for key, indices in groups.items():
+        if len(indices) < 2:
+            continue
+        for i in indices:
+            r = rows[i]
+            row_id = str(r.get("row", i + 2))
+            warnings.append(
+                {
+                    "kind": "duplicate_candidate",
+                    "row": row_id,
+                    "date": r["date"],
+                    "month": r["date"][:7],
+                    "category": r["category"],
+                    "merchant": r["merchant"],
+                    "amount": str(r["amount"]),
+                    "message": "重複候補（date+amount+merchantが同じ行が複数あります）",
+                }
+            )
+
+    return warnings
 
 
 def apply_rules(
