@@ -140,8 +140,9 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
             if col not in r:
                 reasons.append(f"列がない: {col}")
                 continue
-            # r.get(col) or "" は値が 0 や False のとき誤って空文字に変わるため、
-            # デフォルト値は第2引数で明示する。
+            # r.get(col, "") は「キーがなければ空文字を返す」という書き方。
+            # r.get(col) or "" と書く方法もあるが、値が 0 や False のとき
+            # 意図せず空文字に置き換わるバグになるので、第2引数で指定する方が安全。
             text = r.get(col, "")
             if text.strip() == "":
                 reasons.append(f"空欄: {col}")
@@ -236,7 +237,7 @@ def make_summary(ok_rows: list[ExpenseRowNorm], top_n: int = 10) -> list[Summary
 
     summary: list[SummaryRow] = []
 
-    # 先頭に見出し行を入れておくと、summary.csv を単体で開いても内容が分かりやすい。
+    # 先頭にヘッダ行を入れておくと、summary.csv を単体で開いたときにも意味が伝わりやすい。
     summary.append({"type": "month_total", "key": "month", "value": "total_amount"})
     for m in sorted(by_month.keys()):
         summary.append({"type": "month_total", "key": m, "value": str(by_month[m])})
