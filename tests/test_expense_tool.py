@@ -19,7 +19,7 @@ from pathlib import Path
 
 from expense_tool import build_parser, datetime_now_stamp, main
 
-# import を順番ごとにまとめると、標準機能と自作コードの境目が見えやすくなる。
+# import を種類ごとに整理すると、標準機能と自作コードの境目が見えやすくなる。
 # その結果、依存関係を追いやすくなり、ruff の自動整形でも差分が安定しやすい。
 
 # ---------------------------------------------------------------------------
