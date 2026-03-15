@@ -6,6 +6,10 @@
 
 ## 未リリース
 
+- 安全性・重複判定・構造整理の堅実改善を実施。CSV / Excel 出力時の数式インジェクション対策として `sanitize_cell` を追加し、重複判定を error から warning（`duplicate_candidate`）へ変更してグループ全行に付与するようにした。あわせて `rules.json` の厳密バリデーションを追加し、不正な型・値は明示エラーで停止するように変更した。
+- GUI の出力を `out/gui/<run_id>/` 単位に隔離し、`session_state` は最小限の情報だけを保持するよう整理した。さらに、`app.py` の非 UI 処理を `app_helper.py` に切り出し、`safe_resolve` を `Path.relative_to()` ベースの比較へ改善してパス検証を強化した。
+- README に、この作品の位置づけ、安全化対策、UTF-8 前提、負数許可の意図を追記した。公開仕様として `warnings.csv` / GUI warnings に `duplicate_candidate` が追加され、重複候補は clean_rows から除外せず warning 扱いになった。
+- 今回の変更に対する確認として、`pytest` 127 件、`ruff check`、`mypy` がすべて通過した。
 - `tests/test_core.py` と `tests/test_expense_core.py` に戻り値型とテストデータの型注釈を追加し、`normalize_ok_rows()` と `make_summary()` まわりで発生していた `mypy` エラーを解消した。ローカルでは `python -m ruff check .` と Python ファイル対象の `mypy` 実行で確認を実施。
 - `excel_export.py`、`tests/test_expense_tool.py`、`tests/test_html_report.py`、`tests/test_rules.py` の import ブロックを `ruff` の期待する形式に揃えて `I001` を解消し、あわせて import の並び順の意図が追いやすいよう先頭付近の学習用コメントを整えた。ローカルでは `python -m ruff check .` と `python -m py_compile` で確認を実施。
 - 今後の実装予定を管理するために `ROADMAP.md` を追加。
