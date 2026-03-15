@@ -68,7 +68,7 @@ class RunResult(TypedDict):
 def generate_run_id() -> str:
     """実行ごとに一意な ID を生成する。
 
-    UUID4 の先頭 8 文字を使う。ファイル名にそのまま使える文字で構成されており、衝突リスクも十分に低い。
+    UUID4 の先頭 8 文字を使う。ファイルシステムに安全で、衝突リスクも十分に低い。
     """
     return uuid.uuid4().hex[:8]
 
