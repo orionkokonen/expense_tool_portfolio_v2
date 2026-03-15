@@ -57,7 +57,7 @@ def _render_html_markup(markup: str) -> None:
     「コードブロック」と誤解してしまうことがある。
     毎回同じ前処理を書き忘れないよう、この関数に集約している。
     """
-    # 表示崩れの原因だった「先頭インデント付き HTML」をここで必ず正規化する。
+    # 先頭インデントが残ったままだと表示が崩れるため、ここで必ず正規化する。
     st.markdown(normalize_html_fragment(markup), unsafe_allow_html=True)
 
 

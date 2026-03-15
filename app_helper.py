@@ -140,7 +140,7 @@ def run_pipeline(
     """GUI から使う共通実行パイプライン。
 
     CLI と同じ順序で処理し、画面表示とダウンロードに必要な最小限の情報を返す。
-    full clean_rows や source_bytes は保持せず、メモリ使用量を抑える。
+    clean_rows の全件や source_bytes は保持せず、メモリ消費を抑えている。
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     prefix = csv_path.stem

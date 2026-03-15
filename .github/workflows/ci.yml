@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest  # GitHub が用意する Ubuntu 環境で実行する
     strategy:
       matrix:
-        # Python 4 バージョンで同時にテストして互換性を確認する
+        # 4 つの Python バージョンで同時にテストして互換性を確認する
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       # checkout がないと、この後のコマンドは実行対象のコードを見つけられない。
