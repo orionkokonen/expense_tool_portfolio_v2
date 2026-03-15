@@ -12,6 +12,11 @@ app_helper.py — app.py（Streamlit GUI）の非 UI 処理をまとめた補助
   - セッション結果型 (RunResult)
 
 app.py には Streamlit のレイアウト、表示用ヘルパー、イベント配線だけを残す。
+
+読み方のおすすめ:
+  - まず `run_pipeline()` で GUI 実行の全体像を見る
+  - 次に `safe_resolve()` と `read_file_bytes()` で安全面の補助を追う
+  - 最後に `RunResult` を見ると、画面側へ何を渡しているか分かる
 """
 
 from __future__ import annotations
@@ -38,7 +43,11 @@ from rules import apply_rules, find_duplicate_candidates, load_rules
 # --- 型定義 ---
 
 class RunResult(TypedDict):
-    """パイプライン実行結果。session_state に保持する最小限の情報。"""
+    """パイプライン実行結果。session_state に保持する最小限の情報。
+
+    TypedDict を使うと、「どのキーがある前提か」が辞書でも読み取りやすくなる。
+    UI 側はこの形だけを信じて描画すればよいので、責務の境界がはっきりする。
+    """
     source_name: str
     source_path: str
     run_id: str
@@ -207,6 +216,8 @@ def run_pipeline(
         for row in clean_rows[:100]
     ]
 
+    # session_state へ入れる値は「再表示に必要なものだけ」に絞る。
+    # 元CSVの bytes や full clean_rows を持ち続けないことで、実行後のメモリを抑える。
     return {
         "source_name": csv_path.name,
         "source_path": str(csv_path),
@@ -228,6 +239,7 @@ def save_source_csv(uploaded_bytes: bytes, filename: str, out_dir: Path) -> Path
     """アップロードされた CSV を run_id ディレクトリに保存する。
 
     ダウンロード時はこの保存ファイルを読む方式にする（session_state に bytes を持たない）。
+    こうしておくと、画面メモリとダウンロード元ファイルの責務を分けやすい。
     """
     dest = out_dir / filename
     dest.write_bytes(uploaded_bytes)
@@ -235,7 +247,11 @@ def save_source_csv(uploaded_bytes: bytes, filename: str, out_dir: Path) -> Path
 
 
 def copy_source_csv(source_path: Path, out_dir: Path) -> Path:
-    """サンプル CSV を run_id ディレクトリにコピーする。"""
+    """サンプル CSV を run_id ディレクトリにコピーする。
+
+    サンプル実行でもアップロード実行と同じ保存ルールにそろえることで、
+    ダウンロード処理を 1 本化しやすくしている。
+    """
     dest = out_dir / source_path.name
     shutil.copy2(source_path, dest)
     return dest

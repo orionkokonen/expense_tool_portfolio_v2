@@ -3,6 +3,11 @@
 expense_tool.py — CLI（コマンドライン）のエントリポイント
 ターミナルからコマンドを受け取り、チェックやレポート生成を実行する。
 GUI（app.py）と同じパイプラインを使っているが、引数の受け取り方が異なる。
+
+読み方のおすすめ:
+  1. `build_parser()` で受け取る引数を確認する
+  2. `main()` で実行順序を追う
+  3. 実際のデータ処理は expense_core.py / rules.py に見に行く
 """
 
 from __future__ import annotations
@@ -93,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # Path を使うと、パスの結合や存在確認を OS の違いを気にせず書ける。
+    # 文字列のまま扱うより「ファイルとして何をしたいか」が読み取りやすい。
     csv_path = Path(args.csv_path)
     rules_path = Path(args.rules)
 
@@ -127,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
     # 重複候補を warning として検出（clean_rows からは除外しない）
     dup_warnings = find_duplicate_candidates(ok_norm)
 
+    # warning は「重複候補」と「ルール警告」に分かれるが、
+    # 出力時には同じ warnings.csv にまとめて扱う。
     clean_rows, rule_warnings = apply_rules(ok_norm, rules)
     warnings = dup_warnings + rule_warnings
 
@@ -158,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2 if len(errors) > 0 else 0
 
     # 6) report サブコマンド: 集計して全ファイルを出力する
+    # report は check を内包しているので、errors / warnings も必ず一緒に出す。
     summary = make_summary(clean_rows, top_n=args.top_n)
 
     write_csv(str(errors_csv), errors, ["row", "date", "amount", "merchant", "category", "reason"])

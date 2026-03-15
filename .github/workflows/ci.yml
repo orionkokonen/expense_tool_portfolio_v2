@@ -14,7 +14,9 @@ jobs:
         # Python 4 バージョンで同時にテストして互換性を確認する
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
+      # checkout がないと、この後のコマンドは実行対象のコードを見つけられない。
       - uses: actions/checkout@v4          # リポジトリのコードを取得する
+      # setup-python は matrix の値を受け取り、同じ手順を複数バージョンで回してくれる。
       - uses: actions/setup-python@v5      # 指定バージョンの Python をセットアップする
         with:
           python-version: ${{ matrix.python-version }}

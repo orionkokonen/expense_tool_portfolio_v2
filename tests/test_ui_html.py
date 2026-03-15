@@ -1,3 +1,10 @@
+"""tests/test_ui_html.py — HTML 整形ヘルパーの最小テスト。
+
+`normalize_html_fragment()` は小さな関数だが、Streamlit 画面の見た目に直結する。
+そのため、処理が短くても「どの空白を消して、どの並びを残すか」を
+テストで固定しておくと安心して整理しやすい。
+"""
+
 from ui_html import normalize_html_fragment
 
 
@@ -13,6 +20,7 @@ def test_normalize_html_fragment_removes_leading_indentation() -> None:
         </div>
     """
 
+    # 入力側は読みやすいようにインデントして書き、出力側だけをきれいに整える。
     normalized = normalize_html_fragment(raw)
 
     assert normalized == "\n".join(
@@ -40,4 +48,5 @@ def test_normalize_html_fragment_drops_blank_lines() -> None:
 
     """
 
+    # 空行だけを落とし、タグの順番までは崩さないことが大事。
     assert normalize_html_fragment(raw) == "<div>\n<p>Hello</p>\n</div>"

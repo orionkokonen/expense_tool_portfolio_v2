@@ -11,6 +11,7 @@ pythonpath = ["."]
 
 # ruff は「書き方のミス」を素早く見つける道具。
 [tool.ruff]
+# 100 文字は「横に広すぎず、コメントも入れやすい」くらいの長さとして採用。
 line-length = 100
 target-version = "py310"
 
@@ -29,4 +30,5 @@ warn_unused_ignores = true
 # すべての関数に型を明示する習慣が付き、バグの早期発見につながる。
 disallow_untyped_defs = true
 check_untyped_defs = true
+# 外部ライブラリに型情報が無い場合でも、まず自作コード側の型確認を優先する。
 ignore_missing_imports = true

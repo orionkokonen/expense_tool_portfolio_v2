@@ -4,6 +4,8 @@ services:
     name: expense-tool-streamlit
     runtime: python             # Python ランタイムを使う
     plan: free                  # 無料プランで動かす
+    # buildCommand は「デプロイ前の準備」、startCommand は「実際の起動コマンド」。
+    # 役割を分けておくと、依存追加と起動失敗を切り分けやすい。
     buildCommand: pip install -r requirements.txt          # デプロイ時にライブラリをインストール
     # $PORT は Render が自動で割り当てるポート番号（固定値は使えないため環境変数で受け取る）
     # --server.address 0.0.0.0 にすることで外部からアクセスできるようになる

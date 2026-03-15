@@ -4,6 +4,11 @@
 CLI と同じ処理パイプラインをボタン操作でたどれるようにし、
 入力 -> 判定 -> 集計 -> ダウンロードを一画面で追えるようにしている。
 非 UI の処理は app_helper.py に切り出している。
+
+読み方のおすすめ:
+  1. `main()` で「入力を受けて実行する流れ」をつかむ
+  2. `_render_*()` 群で「結果をどう見せるか」を追う
+  3. 画面の外で動く処理は app_helper.py / expense_core.py を読む
 """
 
 from __future__ import annotations
@@ -784,9 +789,14 @@ def _render_validation(last_run: dict[str, Any]) -> None:
 
 
 def _render_summary(last_run: dict[str, Any]) -> None:
-    """summary.csv 相当の内容を画面向けに並べ直して表示する。"""
+    """summary.csv 相当の内容を、画面で読みやすい表へ並べ替えて表示する。
+
+    summary は `type / key / value` の共通形式なので、そのままだと人には少し読みにくい。
+    ここで「月別」「カテゴリ別」などに分け直して、CSV と同じ情報を UI 向けに見せ直す。
+    """
     summary = last_run["summary"]
 
+    # フラットな summary を、表示用の小さな表へ分解する。
     month_rows = _pairs_to_display_rows(
         _summary_pairs(summary, "month_total"),
         key_label="月",
@@ -932,6 +942,7 @@ def main() -> None:
     run_error: str | None = None
 
     # ── パストラバーサル対策 ──
+    # "../../" のような危険なパスが渡っても、プロジェクト外へ出ないよう毎回ここを基準に検証する。
     _project_root = Path.cwd().resolve()
 
     # どのボタンから実行しても、ここから先は同じパイプラインに流す。
@@ -1002,7 +1013,8 @@ def main() -> None:
                 run_error = f"実行に失敗しました: {exc}"
 
         if result is not None:
-            # rerun 後もタブ表示やダウンロードボタンを維持するため、結果を保存する。
+            # Streamlit は操作のたびにスクリプト全体を再実行する。
+            # session_state に保存しておくことで、rerun 後も結果表示を保てる。
             st.session_state[LAST_RUN_KEY] = result
 
     if run_error:

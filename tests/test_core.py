@@ -29,6 +29,7 @@ def test_parse_amount() -> None:
 
 def test_check_rows_and_summary() -> None:
     """check_rows() が OK 行とエラー行に正しく振り分け、集計できるか確認する。"""
+    # 1 つのテストで「入力チェック → 正規化 → 集計」の最短ルートを追っている。
     rows = [
         {"date": "2026-01-10", "amount": "1200", "merchant": "A", "category": "消耗品"},
         {

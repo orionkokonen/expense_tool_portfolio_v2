@@ -75,6 +75,8 @@ def write_html_report(
     cat_labels = [c for c, _ in cat_rows]
     cat_values = [v for _, v in cat_rows]
 
+    # 全件を一気に HTML テーブルへ入れるとブラウザが重くなるため、表示だけ先頭に絞る。
+    # 元データは CSV 側で残るので、「読むための画面」と「保存用ファイル」を役割分担している。
     errors_head = errors[:MAX_TABLE_ROWS]
     warnings_head = warnings[:MAX_TABLE_ROWS]
     clean_head = clean[:MAX_TABLE_ROWS]
@@ -205,6 +207,7 @@ def table_html(rows: Sequence[Mapping[str, object]], columns: Sequence[str]) -> 
         # 空テーブルより「データなし」と明示した方が、読み手が迷いにくい。
         return "<p class='muted'>（なし）</p>"
 
+    # 先にヘッダを固定しておくと、「どの列を見ている表か」が HTML からも追いやすい。
     ths = "".join(f"<th>{escape(c)}</th>" for c in columns)
     trs = []
     for r in rows:
