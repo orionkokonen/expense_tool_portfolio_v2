@@ -40,7 +40,7 @@ from ui_html import normalize_html_fragment
 
 # セッションに直前の実行結果を残し、画面が再描画されても結果を見失わないようにする。
 LAST_RUN_KEY = "last_run"
-# サンプル CSV は「まず触ってみる」入口。入力形式の学習にも使う。
+# サンプル CSV は動作確認の入口で、入力形式の確認にも使える。
 SAMPLE_BAD_CSV_PATH = Path("data/sample_bad.csv")
 SAMPLE_GOOD_CSV_PATH = Path("data/sample_good.csv")
 
@@ -475,12 +475,11 @@ def _render_bar_card(
         )
         return
 
-    # 全件が 0 円でも 0 で割って幅計算が壊れないよう、最低値を 1 にして守る。
+    # 全件 0 円でも 0 除算にならないよう、最大値の下限を 1 にしておく。
     max_value = max(value for _, value in pairs) or 1
     rows_html: list[str] = []
     for label, value in pairs:
-        # 値が小さい項目でも棒が完全に消えると比較しづらい。
-        # 最低幅を少し残して、「項目が存在すること」が目で分かるようにする。
+        # 値が小さい項目でも棒が消えきらないよう、最低幅を確保する。
         width = max(8, round((value / max_value) * 100))
         rows_html.append(
             f"""
@@ -496,7 +495,7 @@ def _render_bar_card(
             """
         )
 
-    # 行ごとに作った HTML を 1 枚のカードへまとめ、共通入口から描画する。
+    # 行ごとに組んだ HTML を 1 枚のカードにまとめて描画する。
     _render_html_markup(
         f"""
         <div class="bar-card">
@@ -910,7 +909,7 @@ def main() -> None:
 
     # 入力部はサイドバーに寄せ、中央カラムは結果の読解に専念できるようにする。
     with st.sidebar:
-        # まず「何を入力する場所か」が分かるよう、見出しやラベルを日本語で統一する。
+        # 見出しやラベルを日本語に統一して、入力場所が一目でわかるようにする。
         st.header("実行設定")
         uploaded_csv = st.file_uploader("CSV ファイル", type=["csv"])
         st.caption("必須列: date / amount / merchant / category")
@@ -1027,8 +1026,7 @@ def main() -> None:
 
     _render_run_header(last_run)
 
-    # 情報を「全体像 → 検証 → 集計 → ダウンロード」の順で読む前提で並べる。
-    # ラベルも日本語にして、画面全体の用語をそろえる。
+    # タブを「全体像 → 検証 → 集計 → ダウンロード」の読む順に並べ、ラベルも日本語に統一する。
     tab_overview, tab_validation, tab_summary, tab_downloads = st.tabs(
         ["概要", "検証", "集計", "ダウンロード"]
     )

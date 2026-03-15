@@ -140,9 +140,9 @@ def check_rows(rows: list[dict[str, str]]) -> tuple[list[ExpenseRow], list[Issue
             if col not in r:
                 reasons.append(f"列がない: {col}")
                 continue
-            # r.get(col, "") は「キーがなければ空文字を返す」という書き方。
-            # r.get(col) or "" と書く方法もあるが、値が 0 や False のとき
-            # 意図せず空文字に置き換わるバグになるので、第2引数で指定する方が安全。
+            # r.get(col, "") はキーがなければ空文字を返す書き方。
+            # r.get(col) or "" は値が 0 や False のときも空文字になるため、
+            # 第 2 引数で明示する方が安全。
             text = r.get(col, "")
             if text.strip() == "":
                 reasons.append(f"空欄: {col}")

@@ -216,8 +216,8 @@ def run_pipeline(
         for row in clean_rows[:100]
     ]
 
-    # session_state へ入れる値は「再表示に必要なものだけ」に絞る。
-    # 元CSVの bytes や full clean_rows を持ち続けないことで、実行後のメモリを抑える。
+    # session_state に保持するのは再表示に必要な最小限の情報だけに絞る。
+    # 元 CSV のバイト列や全クリーン行を保持しないことで、実行後のメモリ消費を抑える。
     return {
         "source_name": csv_path.name,
         "source_path": str(csv_path),
