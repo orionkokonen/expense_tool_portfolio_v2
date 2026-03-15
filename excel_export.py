@@ -21,15 +21,13 @@ from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 
-# Worksheet 型を明示しておくと、「この関数は Excel のシートを受け取る」と伝えやすい。
-# 型ヒントは、実行時の動きを変えるものではなく、読み手とツール向けの説明。
-# そのおかげで、補完が効いたり、別の型を渡すミスに気づきやすくなったりする。
+# Worksheet 型を明示すると「Excel シートを受け取る関数」だと伝わりやすく、
+# 補完や型チェックで引数のミスにも気づきやすくなる。
 from openpyxl.worksheet.worksheet import Worksheet
 
 from expense_core import SummaryRow, sanitize_cell
 
-# import は「標準機能 → 外部ライブラリ → このプロジェクト内のコード」の順にそろえる。
-# こうしておくと、どこから来た名前か追いやすくなり、整形ツールでも同じ形を保ちやすい。
+# import の並び: 標準 → 外部ライブラリ → 自プロジェクト の順にそろえる（ruff 準拠）。
 
 def write_xlsx_report(
     *,
