@@ -1,3 +1,4 @@
+# このファイルは、結果を見やすいHTMLレポートに変換する処理です。
 # -*- coding: utf-8 -*-
 """
 html_report.py — HTML レポートの生成

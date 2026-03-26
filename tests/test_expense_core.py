@@ -1,3 +1,4 @@
+# このファイルは、CSVの読み込みと集計の中心処理を確かめるテストです。
 # -*- coding: utf-8 -*-
 """
 tests/test_expense_core.py: expense_core.py の単体テスト
@@ -452,6 +453,19 @@ class TestCsvIO:
         rows = read_csv(str(csv_path))
         assert len(rows) == 1
         assert rows[0]["date"] == "2026-01-10"
+
+    def test_read_csv_skips_comment_lines(self, tmp_path: Path) -> None:
+        """先頭のコメント行と空行を読み飛ばせるか。"""
+        csv_path = tmp_path / "commented.csv"
+        csv_path.write_text(
+            "# このCSVはテスト用サンプルです\n\n"
+            "date,amount,merchant,category\n"
+            "2026-01-10,1200,A,交通費\n",
+            encoding="utf-8",
+        )
+        rows = read_csv(str(csv_path))
+        assert len(rows) == 1
+        assert rows[0]["merchant"] == "A"
 
     def test_read_csv_empty_file_raises(self, tmp_path: Path) -> None:
         """ヘッダなしファイルは ValueError になるか。"""

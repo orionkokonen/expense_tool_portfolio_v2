@@ -1,3 +1,4 @@
+# このファイルは、集計結果をExcelファイルとして書き出す処理です。
 # -*- coding: utf-8 -*-
 """
 excel_export.py — 集計結果から Excel レポートを作る。

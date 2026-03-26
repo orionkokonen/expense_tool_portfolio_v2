@@ -1,3 +1,4 @@
+# このファイルは、HTMLレポート生成が正しく動くか確かめるテストです。
 # -*- coding: utf-8 -*-
 """
 tests/test_html_report.py — HTML レポート生成のテスト。

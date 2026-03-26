@@ -1,3 +1,4 @@
+# このファイルは、画面用HTMLの整形が正しく動くか確かめるテストです。
 """tests/test_ui_html.py — HTML 整形ヘルパーの最小テスト。
 
 `normalize_html_fragment()` は小さな関数だが、Streamlit 画面の見た目に直結する。

@@ -1,3 +1,4 @@
+# このファイルは、画面アプリ向け補助処理が正しく動くか確かめるテストです。
 # -*- coding: utf-8 -*-
 """
 tests/test_app_helper.py — app_helper.py の単体テスト。

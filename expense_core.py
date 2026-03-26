@@ -1,3 +1,4 @@
+# このファイルは、CSVを読み込み、チェックし、集計する中心の処理です。
 # -*- coding: utf-8 -*-
 """
 expense_core.py — データ処理の中心部
@@ -81,7 +82,10 @@ def read_csv(path: str) -> list[dict[str, str]]:
     空のファイルや列名がない場合は ValueError を出して呼び出し元に知らせる。
     """
     with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
+        filtered_lines = [
+            line for line in f if line.strip() and not line.lstrip().startswith("#")
+        ]
+        reader = csv.DictReader(filtered_lines)
         if reader.fieldnames is None:
             raise ValueError("CSVの列名が読めませんでした")
         return list(reader)  # 値はすべて str（空欄なら ""）

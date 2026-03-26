@@ -1,3 +1,4 @@
+# このファイルは、Excel書き出し処理を確かめるテストです。
 # -*- coding: utf-8 -*-
 """
 tests/test_excel_export.py: excel_export.py の単体テスト

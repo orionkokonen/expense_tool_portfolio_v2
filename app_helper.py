@@ -1,3 +1,4 @@
+# このファイルは、画面アプリから使う補助処理をまとめた部品です。
 # -*- coding: utf-8 -*-
 """
 app_helper.py — app.py（Streamlit GUI）の非 UI 処理をまとめた補助モジュール。

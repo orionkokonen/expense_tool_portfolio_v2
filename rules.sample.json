@@ -1,4 +1,4 @@
-{
+{ "_description": "このファイルは、ルール設定を書くときの見本JSONです。",
   "allowed_categories": [
     "交通費",
     "交際費",

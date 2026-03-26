@@ -1,3 +1,4 @@
+# このファイルは、家計簿データの基本チェック処理を確かめるテストです。
 # -*- coding: utf-8 -*-
 """
 tests/test_core.py — expense_core.py の単体テスト

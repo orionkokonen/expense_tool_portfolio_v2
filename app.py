@@ -1,3 +1,4 @@
+# このファイルは、家計簿ツールの画面アプリを起動する入口です。
 # -*- coding: utf-8 -*-
 """Expense Tool の Streamlit 画面。
 

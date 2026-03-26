@@ -1,4 +1,4 @@
-# このファイルに、テスト・静的解析・型チェックの設定をまとめる。
+# このファイルは、このPythonプロジェクトの基本情報と開発設定です。
 [project]
 name = "expense-tool-portfolio"
 version = "0.2.0"

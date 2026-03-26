@@ -1,4 +1,4 @@
-# Render で Streamlit アプリを公開するための最小設定。
+# このファイルは、Renderにこのアプリを公開するときの設定です。
 services:
   - type: web                   # Web サービスとしてデプロイする
     name: expense-tool-streamlit
