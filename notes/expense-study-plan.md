@@ -68,19 +68,12 @@
 ポイント: 「全部文字列のまま check_rows で弾いて、正常と確定した後に int 化する」という順序。先に int() すると例外処理があちこちに散らばるから。
 
 2. errors と warnings の使い分け
-
-errors = 形式エラー。後工程から除外する（expense_core.py:119-186）
-warnings = ルール違反。clean_rows には残す（人が確認する問題）
-これは面接で「なぜ2つに分けた?」と必ず聞かれる設計判断。
+   errors = 形式エラー。後工程から除外する（expense_core.py:119-186）
+   warnings = ルール違反。clean_rows には残す（人が確認する問題）
+   これは面接で「なぜ2つに分けた?」と必ず聞かれる設計判断。
 
 3. rules.json を外部化している理由
    コードを書き換えずに、カテゴリ・禁止ワード・上限額を変更できる。rules.py:138-175（load_rules）で JSON → Rules dataclass に変換する流れを押さえる。
-
-4. 集計（make_summary）のフラット構造
-   {"type", "key", "value"} の3列固定にしている理由 → CSV/Excel/HTML で同じ形を使い回せるから。expense_core.py:210-273
-
-5. 重複検出のキー
-   (date, amount, merchant.lower()) で同じなら重複候補。除外せず warning だけ付ける（人判断に任せる）。rules.py:194-231
 
 ## 【ユニット3】
 
@@ -88,21 +81,6 @@ warnings = ルール違反。clean_rows には残す（人が確認する問題�
    CSV = 元データとして残す（全件）。後続処理や他システムに渡しやすい
    Excel = 人が目で確認する用。シート分割＋グラフ＋フィルタで操作性が高い
    HTML = ブラウザで共有する用。Chart.jsでグラフ表示、1ファイルで完結 → 「同じ集計データを3つの用途に出し分けている」が言えればOK
-
-2. Excelのシート構成（5枚）を覚える
-   excel_export.py:63-76
-   Errors / Warnings / Clean / Summary / Charts
-   なぜシート分割？ → エラーと正常データを1画面で切り替えて見れる。ユニット2で学ぶ「errors/warnings/clean」の三分割がそのまま出力に反映されている
-
-3. SummaryRow のフラット構造が3形式に効いている
-   excel_export.py:145-154, html_report.py:63-72
-   {"type", "key", "value"} の3列固定だから、CSV/Excel/HTML 全部で 同じロジックで type="month_total" をフィルタ できる
-   → 「出力先が増えても集計側を変えなくていい」設計判断（面接で聞かれる）
-
-4. HTMLの表示件数を絞っている理由
-   html_report.py:23, html_report.py:79-83
-   MAX_TABLE_ROWS = 200 で先頭200件だけ表示
-   なぜ？ → 数千行を一度に描画するとブラウザが重い。全件は CSV 側で担保（役割分担）
 
 ## 【ユニット5】
 
@@ -122,15 +100,6 @@ warnings = ルール違反。clean_rows には残す（人が確認する問題�
 3. UI と非UIロジックの分離
    run_pipeline などの重い処理は app_helper.py に切り出し、app.py は描画と入力集約に専念。
    面接ワード: 「関心の分離」「CLI (expense_tool.py) と GUI (app.py) が同じパイプラインを共有」
-
-4. パストラバーサル対策(app.py:944-958)
-   ユニット4のセキュリティと直結する部分。GUI から任意のパスを入力できるので必ず守る。
-   Path.cwd().resolve() を基準に safe_resolve でチェック
-   外を指していたら実行前にブロック
-
-5. 例外の具体列挙キャッチ(app.py:1003-1013)
-   except Exception: で握りつぶさず、ValueError / FileNotFoundError / PermissionError / UnicodeDecodeError / JSONDecodeError / OSError と具体的に書いている意図を説明できるように。
-   面接ワード: 「想定外の例外までは飲み込まない」「予期した失敗だけをユーザー向けエラーに変換する」
 
 ## 【ユニット6】
 
@@ -162,9 +131,6 @@ warnings = ルール違反。clean_rows には残す（人が確認する問題�
 3. なぜ DB・認証なしの構成なのかを言えるようにする（ファイル処理アプリとして割り切っている点）
    → README.md:344-366
 
-4. rules.json を外部化している意図（コードを書き換えずにルールを変えられる）を押さえる
-   → README.md:221-228
-
 ## 【ユニット4】
 
 A. なぜ "errors / warnings" を分けたか （ユニット2とも重なるが、セキュリティ観点でも「検証層で弾く＝後工程に不正データを流さない」設計として語れる）
@@ -178,6 +144,9 @@ D. @dataclass(frozen=True) rules.py:23-47 … ルール設定が実行中に書�
 E. DB・認証なしの割り切り README.md:344-366 … 「そもそも攻撃面を減らす設計」と言える。
 
 ## 【ユニット2】
+
+重複検出のキー
+(date, amount, merchant.lower()) で同じなら重複候補。除外せず warning だけ付ける（人判断に任せる）。rules.py:194-231
 
 A. @dataclass(frozen=True) の意味
 処理中に設定値が書き換えられない＝安全。rules.py:23-47
@@ -195,6 +164,21 @@ E. TypedDict を使う理由
 辞書のキーと型を IDE・mypy に教えられる。dict のまま使うより安全。expense_core.py:25-76
 
 ## 【ユニット3】
+
+2. SummaryRow のフラット構造が3形式に効いている
+   excel_export.py:145-154, html_report.py:63-72
+   {"type", "key", "value"} の3列固定だから、CSV/Excel/HTML 全部で 同じロジックで type="month_total" をフィルタ できる
+   → 「出力先が増えても集計側を変えなくていい」設計判断（面接で聞かれる）
+
+Excelのシート構成（5枚）を覚える
+excel_export.py:63-76
+Errors / Warnings / Clean / Summary / Charts
+なぜシート分割？ → エラーと正常データを1画面で切り替えて見れる。ユニット2で学ぶ「errors/warnings/clean」の三分割がそのまま出力に反映されている
+
+HTMLの表示件数を絞っている理由
+html_report.py:23, html_report.py:79-83
+MAX_TABLE_ROWS = 200 で先頭200件だけ表示
+なぜ？ → 数千行を一度に描画するとブラウザが重い。全件は CSV 側で担保（役割分担）
 
 A. Excelの細かい操作性の作り込み
 excel_export.py:108-112
@@ -223,6 +207,15 @@ escape()（HTMLのXSS対策）html_report.py:215
 
 ## 【ユニット5】
 
+4. 例外の具体列挙キャッチ(app.py:1003-1013)
+   except Exception: で握りつぶさず、ValueError / FileNotFoundError / PermissionError / UnicodeDecodeError / JSONDecodeError / OSError と具体的に書いている意図を説明できるように。
+   面接ワード: 「想定外の例外までは飲み込まない」「予期した失敗だけをユーザー向けエラーに変換する」
+
+パストラバーサル対策(app.py:944-958)
+ユニット4のセキュリティと直結する部分。GUI から任意のパスを入力できるので必ず守る。
+Path.cwd().resolve() を基準に safe_resolve でチェック
+外を指していたら実行前にブロック
+
 A. HTML 埋め込みと XSS 対策(app.py:435-451, app.py:488-490)
 st.markdown(..., unsafe_allow_html=True) を使う際、CSV 由来の文字列は必ず html.escape() をかけている。ユニット4とセットで語れると強い。
 
@@ -241,7 +234,11 @@ E. サンプル実行ボタン(app.py:935-940)
 ## 【ユニット6】
 
 A. matrix戦略の意味：なぜ複数Pythonバージョンで回すのか（互換性担保、ライブラリ更新の早期検知）
+
 B. ruff / mypy / pytest の役割分担：静的解析 vs 型 vs 動的テストの違い
+
 C. requirements-dev.txt と本番用の分離の意図
+
 D. テストの粒度感：ユニットテスト中心か、結合テストもあるか、各テストファイルを1つ開いて書き方を確認
+
 E. CIが落ちたらマージしない運用（ブランチ保護ルールなどの話）
