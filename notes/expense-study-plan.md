@@ -951,11 +951,7 @@ Path クラス: Python標準の pathlib モジュール。文字列でパスを�
 
 ## 【ユニット5】
 
-### 1. UI と非UIロジックの分離
-
-→ ユニット1-3（CLI と GUI の2入口構成）で説明済み。3層構造（app.py（画面）→ app_helper.py（橋渡し）→ expense_core.py / rules.py（コアロジック））と「関心の分離」は同じ論点なので、ここでは触れない。
-
-### 2. Streamlit の実行モデルと st.session_state
+### 1. Streamlit の実行モデルと st.session_state
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 ユニット5-1：Streamlitの実行モデルと st.session_state
@@ -1082,7 +1078,7 @@ A. 「初回アクセス時はまだキーが無いので、[キー] だとKeyEr
 
 ここまで言えれば、ユニット5-1は面接レベルでクリアです。
 
-### 3. main() の全体の流れ(app.py:903-1045)
+### 2. main() の全体の流れ(app.py:903-1045)
 
 主役はこの関数: app.py:903-1045
 
