@@ -64,31 +64,45 @@ CSV / Excel / HTML の成果物を出力するポートフォリオです。
 ## 全体の処理の流れ
 
 ```text
-CSVファイル
-    ↓
-① read_csv
-    ↓
-② check_rows
-    ↓
-  errors / ok_rows
-    ↓
-③ normalize_ok_rows
-    ↓
-④ load_rules
-    ↓
-④.5 find_duplicate_candidates
-    ↓
-⑤ apply_rules
-    ↓
-  warnings / clean_rows
-    ↓
-⑥ make_summary
-    ↓
-⑦ write_csv / write_xlsx_report / write_html_report
+CSV
+ ↓
+① read_csv                    ファイル読み込み
+ ↓
+② check_rows                  形式チェック（必須列・日付・金額が整数か）
+ ↓
+   → errors  ─→ errors.csv に保存（捨てない）
+   → ok_rows
+ ↓
+③ load_rules                  rules.json 読み込み（先に！壊れてたら即終了 = fail fast）
+ ↓
+④ normalize_ok_rows           型変換（文字列 → 数値/日付）
+ ↓
+⑤ find_duplicate_candidates   → dup_warnings（行は clean_rows に残す）
+ ↓
+⑥ apply_rules                 社内ルール違反チェック
+ ↓
+   → rule_warnings
+   → clean_rows（重複候補は含まれている点に注意）
+ ↓
+warnings = dup_warnings + rule_warnings  ← 合体
+ ↓
+[check モードならここで終了]
+ ↓
+⑦ make_summary                clean_rows を集計
+ ↓
+⑧ 出力（関心ごとにファイル分離）
+   - write_csv         (expense_core.py)
+   - write_xlsx_report (excel_export.py)
+   - write_html_report (html_report.py)
 ```
 
-ポイントは、**形式エラーのある行を早い段階で除外**していることです。
-そのため後続のルール判定と集計は、正常に読めるデータだけを前提にシンプルに書けています。
+設計上のポイント:
+
+- **形式エラーは早い段階で `errors.csv` に振り分け**、後続のルール判定や集計は正常に読めるデータだけを前提にシンプルに書ける
+- **`load_rules` を `normalize_ok_rows` より先に呼ぶ**ことで、`rules.json` が壊れていれば重い処理に入る前に止める（fail fast）
+- **`warnings` は2か所から生まれる**（重複候補とルール違反）が、利用者が複数ファイルを開かなくて済むよう 1 つの `warnings.csv` にまとめる
+- **重複候補は warning として通知するだけで `clean_rows` からは除外しない**（同じ日に同じ店で2回買い物することは普通にあり、機械的な除外は誤検出を生むため、判断は人に委ねる）
+- **CSV / Excel / HTML の生成は別モジュールに分離**（関心の分離）し、`expense_core.py` は純粋なデータ処理に集中させる
 
 ---
 
